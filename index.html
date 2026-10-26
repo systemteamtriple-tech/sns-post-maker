@@ -1,0 +1,1552 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>投稿画像一括メーカー</title>
+<meta name="description" content="テンプレートにタイトル・本文・画像を入れて、SNS投稿画像を複数枚まとめて作れる無料ツール。">
+<link id="gfonts" rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=IBM+Plex+Mono:wght@400;500&family=M+PLUS+Rounded+1c:wght@400;700;800&family=Noto+Sans+JP:wght@400;700;900&family=Noto+Serif+JP:wght@400;700;900&family=Zen+Kaku+Gothic+New:wght@400;500;700&family=Zen+Maru+Gothic:wght@400;700;900&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+:root{
+  /* Layout: 校正台 — 左が編集台（デザイン・AI・投稿リスト）、右がライトボックスに並べたコンタクトシート */
+  --bg:#ECF0ED;
+  --panel:#FFFFFF;
+  --field:#F5F8F6;
+  --ink:#17211D;
+  --muted:#56655E;
+  --line:#D0D9D4;
+  --accent:#1C6A53;
+  --accent-ink:#FFFFFF;
+  --accent-soft:#DCECE4;
+  --warn:#A3461A;
+  --warn-soft:#FBE7DA;
+  --sheet:#242B28;
+  --sheet-ink:#CBD5D0;
+  --sheet-dim:#8B9993;
+  --sheet-warn:#F4A877;
+  --tick:#5A6862;
+  --scrim:rgba(10,14,12,.86);
+  --focus:#2F86D0;
+  --f-display:"Dela Gothic One","Hiragino Sans","Yu Gothic",sans-serif;
+  --f-ui:"Zen Kaku Gothic New","Hiragino Sans","Hiragino Kaku Gothic ProN","Yu Gothic UI","Meiryo",system-ui,sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --r:12px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#121715; --panel:#1A211E; --field:#151B18; --ink:#E3EAE6; --muted:#97A59E; --line:#2D3833;
+    --accent:#5DBE99; --accent-ink:#0B1611; --accent-soft:#1E3429; --warn:#F09A62; --warn-soft:#3A2416;
+    --sheet:#0C100E; --sheet-ink:#CBD5D0; --sheet-dim:#7F8D87; --sheet-warn:#F4A877; --tick:#3F4C46;
+    --scrim:rgba(3,5,4,.88); --focus:#6AB4F0;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#121715; --panel:#1A211E; --field:#151B18; --ink:#E3EAE6; --muted:#97A59E; --line:#2D3833;
+  --accent:#5DBE99; --accent-ink:#0B1611; --accent-soft:#1E3429; --warn:#F09A62; --warn-soft:#3A2416;
+  --sheet:#0C100E; --sheet-ink:#CBD5D0; --sheet-dim:#7F8D87; --sheet-warn:#F4A877; --tick:#3F4C46;
+  --scrim:rgba(3,5,4,.88); --focus:#6AB4F0;
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%}
+img{max-width:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--f-ui);font-size:15px;line-height:1.6;-webkit-font-smoothing:antialiased}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--panel)}
+.mono{font-family:var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:.02em}
+.sr{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+h2{font-size:16px;line-height:1.4;margin:0;font-weight:700;text-wrap:balance}
+p{margin:0}
+code{font-family:var(--f-mono);font-size:.92em;background:var(--field);border:1px solid var(--line);border-radius:4px;padding:0 4px}
+
+/* header */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--panel);border-bottom:1px solid var(--line)}
+.top-in{max-width:1480px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:10px;display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap}
+.brand{display:flex;align-items:baseline;gap:12px;min-width:0;flex-wrap:wrap}
+.brand-name{font-family:var(--f-display);font-size:20px;letter-spacing:.03em;line-height:1.3}
+.brand-sub{font-size:12px;color:var(--muted)}
+.top-acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.top-acts select{width:auto;padding-block:7px}
+
+/* layout */
+.wrap{max-width:1480px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 64px;display:grid;grid-template-columns:minmax(0,1fr);gap:20px}
+.editor{display:grid;gap:16px;min-width:0;align-content:start}
+@media (min-width:980px){
+  .wrap{grid-template-columns:minmax(0,560px) minmax(0,1fr);align-items:start}
+  .sheet{position:sticky;top:calc(env(safe-area-inset-top,0px) + 74px);max-height:calc(100vh - 94px);overflow:auto}
+}
+.sec{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);padding:18px;display:grid;gap:14px;min-width:0}
+.sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.lab{font-size:12.5px;color:var(--muted);font-weight:700;letter-spacing:.04em}
+.field{display:grid;gap:6px;min-width:0}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:end}
+.grid3{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,.6fr) minmax(0,1.2fr);gap:12px;align-items:end}
+@media (max-width:560px){.grid2,.grid3{grid-template-columns:minmax(0,1fr)}}
+input[type=text],input[type=number],select,textarea{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:8px;padding:8px 11px;line-height:1.5}
+textarea{resize:vertical;min-height:2.8em}
+input[type=color]{width:44px;height:34px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--field);cursor:pointer}
+input[type=checkbox]{accent-color:var(--accent);width:18px;height:18px}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.note,.hint{color:var(--muted);font-size:13.5px;line-height:1.75}
+.hint{font-size:12.5px}
+
+/* buttons */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;font:inherit;font-size:14px;font-weight:700;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer;line-height:1.3;white-space:nowrap}
+.btn:hover:not(:disabled){border-color:var(--muted)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary:hover:not(:disabled){filter:brightness(1.07);border-color:var(--accent)}
+.btn.ghost{background:transparent}
+.btn.small{font-size:12.5px;padding:5px 10px;border-radius:7px}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.acts{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap}
+
+/* option groups */
+.sizes{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:560px){.sizes{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.opt{font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:10px;padding:9px 10px;cursor:pointer;min-width:0;text-align:left}
+.opt:hover{border-color:var(--muted)}
+.opt[aria-pressed="true"]{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.size-opt{display:flex;gap:10px;align-items:center}
+.size-opt .shape{flex:none;width:22px;display:grid;place-items:center;height:26px}
+.size-opt .shape i{display:block;border:1.5px solid currentColor;border-radius:2px;width:100%;max-width:100%}
+.size-opt b{display:block;font-size:13.5px;line-height:1.3}
+.size-opt .mono{display:block;font-size:11px;color:var(--muted);line-height:1.3}
+.size-opt .rt{display:inline;margin-left:6px;font-weight:400}
+.tpls{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px}
+.tpl{display:grid;gap:6px;padding:6px 6px 7px;text-align:center;font-size:12px;font-weight:700;line-height:1.3}
+@media (max-width:560px){.tpl{font-size:11px;word-break:keep-all}}
+.tpl canvas{display:block;width:100%;height:auto;border-radius:4px;background:var(--line)}
+.pals{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.bgs{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px}
+@media (max-width:560px){.bgs{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.bgopt{display:grid;gap:5px;padding:5px 5px 6px;text-align:center;font-size:12px;font-weight:700;line-height:1.3}
+.bgopt canvas{display:block;width:100%;height:auto;border-radius:4px;background:var(--line)}
+@media (max-width:560px){.pals{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.pal{display:grid;justify-items:center;gap:6px;padding:9px 4px 8px;font-size:12px;font-weight:700;text-align:center}
+.sw{display:flex;padding-left:5px}
+.sw i{width:18px;height:18px;border-radius:50%;border:1px solid var(--line);margin-left:-5px;display:block}
+.inline{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:13.5px;color:var(--muted)}
+.segbtn{display:inline-grid;grid-auto-flow:column;grid-auto-columns:1fr;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--field);width:100%}
+.segbtn button{font:inherit;font-size:14px;border:0;background:transparent;color:var(--ink);padding:8px 12px;cursor:pointer}
+.segbtn button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);font-weight:700}
+.check{display:flex;gap:8px;align-items:center;font-size:14px;min-height:42px;cursor:pointer}
+
+/* AI */
+.pill{font-size:12px;line-height:1.5;padding:2px 10px;border-radius:999px;background:var(--field);color:var(--muted);border:1px solid var(--line);white-space:nowrap}
+.pill.ok{background:var(--accent-soft);color:var(--accent);border-color:transparent}
+.pill.off{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.status{font-size:13px;color:var(--muted);min-width:0}
+.steps{list-style:none;margin:0;padding:0;display:grid;gap:18px;counter-reset:st}
+.step{display:grid;grid-template-columns:28px minmax(0,1fr);gap:12px;counter-increment:st}
+.step::before{content:counter(st);width:28px;height:28px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-family:var(--f-mono);font-weight:500;font-size:13px;display:grid;place-items:center}
+.step-body{display:grid;gap:10px;min-width:0}
+.step-t{font-weight:700;font-size:14.5px;line-height:28px}
+.links{display:flex;gap:6px 16px;flex-wrap:wrap;font-size:13.5px}
+.links a{color:var(--accent);font-weight:700;text-underline-offset:3px}
+.acts select{width:auto;max-width:100%}
+#aiPrompt{font-size:13px;line-height:1.6;color:var(--muted)}
+.privacy{font-size:12.5px;color:var(--muted);text-align:center}
+.status.warn{color:var(--warn)}
+.status.ok{color:var(--accent)}
+
+/* rows */
+.count{font-size:12.5px;color:var(--muted)}
+.bulk{display:grid;gap:10px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--field)}
+.bulk textarea{background:var(--panel)}
+.bulk select{width:auto;max-width:100%;background:var(--panel)}
+.sample-note{background:var(--accent-soft);border-radius:10px;padding:10px 12px;font-size:13.5px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
+.rows{display:grid;gap:10px;border-radius:12px}
+.rows.drop{outline:2px dashed var(--accent);outline-offset:6px}
+.rows-empty{padding:26px 16px;border:1px dashed var(--line);border-radius:10px;text-align:center;color:var(--muted);font-size:14px;line-height:1.8}
+.row{display:grid;grid-template-columns:76px minmax(0,1fr);gap:14px;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--field)}
+.row-side{display:grid;gap:8px;align-content:start;justify-items:start}
+.row-no{font-size:13px;font-weight:500;color:var(--muted);line-height:1}
+.row-no.on{color:var(--accent)}
+.thumb{width:76px;height:76px;border-radius:8px;border:1px dashed var(--muted);background:var(--panel);color:var(--muted);font:inherit;font-size:11.5px;line-height:1.4;cursor:pointer;padding:4px;overflow:hidden;display:grid;place-items:center;text-align:center}
+.thumb.has{border-style:solid;border-color:var(--line);padding:0}
+.thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.thumb.drop{border:2px solid var(--accent)}
+.row-fields{display:grid;gap:8px;min-width:0}
+.fl{display:grid;gap:4px;min-width:0}
+.row-fields input,.row-fields textarea{background:var(--panel)}
+.cnt{font-size:11.5px;color:var(--muted);font-weight:400;margin-left:6px;letter-spacing:0}
+.row-acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.row-acts .sp{flex:1 1 auto}
+.row-warn{font-size:12px;color:var(--warn);background:var(--warn-soft);padding:2px 9px;border-radius:999px;font-weight:700}
+
+/* sheet */
+.sheet{background:var(--sheet);color:var(--sheet-ink);border-radius:var(--r);padding:18px;display:grid;gap:16px;min-width:0;align-content:start}
+.sheet-h{display:flex;justify-content:space-between;align-items:baseline;gap:6px 12px;flex-wrap:wrap}
+.sheet-h .mono{font-size:12px;color:var(--sheet-dim)}
+.frames{--fw:170px;display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--fw),1fr));gap:22px 16px}
+.frame{background:none;border:0;margin:0;padding:0;font:inherit;color:inherit;cursor:zoom-in;display:grid;gap:6px;text-align:left;min-width:0;border-radius:4px}
+.fr{position:relative;padding:9px}
+.fr::before{content:"";position:absolute;inset:0;pointer-events:none;background:
+  linear-gradient(var(--tick),var(--tick)) left top/12px 1px no-repeat,
+  linear-gradient(var(--tick),var(--tick)) left top/1px 12px no-repeat,
+  linear-gradient(var(--tick),var(--tick)) right top/12px 1px no-repeat,
+  linear-gradient(var(--tick),var(--tick)) right top/1px 12px no-repeat,
+  linear-gradient(var(--tick),var(--tick)) left bottom/12px 1px no-repeat,
+  linear-gradient(var(--tick),var(--tick)) left bottom/1px 12px no-repeat,
+  linear-gradient(var(--tick),var(--tick)) right bottom/12px 1px no-repeat,
+  linear-gradient(var(--tick),var(--tick)) right bottom/1px 12px no-repeat}
+.fr canvas{display:block;width:100%;height:auto;max-width:100%;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+.frame:hover .fr canvas{outline:2px solid var(--sheet-ink);outline-offset:0}
+.frame.demo{cursor:default}
+.frame.demo:hover .fr canvas{outline:none}
+.fmeta{display:flex;align-items:center;gap:8px;font-size:12px;padding-inline:9px;min-height:22px;flex-wrap:wrap}
+.fmeta .mono{font-weight:500}
+.fwarn{color:var(--sheet-warn);border:1px solid var(--sheet-warn);border-radius:999px;padding:0 8px;font-size:11.5px;line-height:1.6}
+.sheet-empty{padding:14px 12px;text-align:center;color:var(--sheet-dim);border:1px dashed var(--tick);border-radius:10px;font-size:14px}
+.sheet-hint{font-size:12.5px;color:var(--sheet-dim)}
+.sheet-h .mono{flex:1 1 auto}
+.dock-toggle{display:none;background:transparent;color:var(--sheet-ink);border-color:var(--tick)}
+.dock-toggle:hover:not(:disabled){border-color:var(--sheet-ink)}
+@media (max-width:979px){
+  .wrap{display:block}
+  .sheet{position:sticky;bottom:calc(8px + env(safe-area-inset-bottom,0px));z-index:15;margin-top:20px;padding:10px 12px 12px;gap:8px;box-shadow:0 -4px 24px rgba(0,0,0,.28)}
+  .sheet-h{align-items:center}
+  .sheet-h h2{font-size:14px}
+  .dock-toggle{display:inline-flex}
+  .frames{display:flex;gap:10px;overflow-x:auto;overscroll-behavior-x:contain;padding-bottom:4px}
+  .frame{flex:none;position:relative;gap:0}
+  .fr{padding:0}
+  .fr::before{display:none}
+  .fr canvas{height:118px;width:auto;max-width:none;box-shadow:none;border-radius:3px}
+  .fmeta{position:absolute;left:4px;top:4px;min-height:0;padding:1px 6px;gap:4px;border-radius:4px;background:rgba(0,0,0,.6);color:#fff;font-size:11px}
+  .fwarn{color:#FFC59E;border-color:#FFC59E;font-size:10.5px;padding:0 5px}
+  .sheet-hint{display:none}
+  .sheet-empty{padding:12px}
+  .sheet.collapsed .frames,.sheet.collapsed .sheet-empty{display:none}
+  .toast{top:calc(env(safe-area-inset-top,0px) + 12px);bottom:auto}
+}
+
+/* modal */
+.modal{position:fixed;inset:0;z-index:50;background:var(--scrim);display:grid;place-items:center;padding:calc(env(safe-area-inset-top,0px) + 12px) max(16px,env(safe-area-inset-right,0px)) calc(env(safe-area-inset-bottom,0px) + 12px) max(16px,env(safe-area-inset-left,0px))}
+.modal-in{display:grid;gap:12px;width:100%;max-width:980px;max-height:100%;grid-template-rows:auto minmax(0,1fr) auto;color:var(--sheet-ink)}
+.modal-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.modal-stage{min-height:0;display:grid;place-items:center}
+.modal-stage canvas{display:block;max-width:100%;max-height:calc(100vh - 170px);width:auto;height:auto;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.modal-warn{font-size:13px;color:var(--sheet-warn);text-align:center}
+
+/* toast */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--ink);color:var(--bg);border-radius:14px;padding:10px 12px 10px 16px;display:flex;gap:12px;align-items:center;font-size:14px;line-height:1.5;width:max-content;max-width:calc(100% - 32px);box-shadow:0 8px 24px rgba(0,0,0,.25)}
+.toast-act{font:inherit;font-weight:700;font-size:13px;background:transparent;color:inherit;border:1px solid currentColor;border-radius:999px;padding:3px 12px;cursor:pointer;white-space:nowrap}
+@media (prefers-reduced-motion:no-preference){.toast{animation:tin .18s ease-out}@keyframes tin{from{opacity:0;transform:translate(-50%,6px)}to{opacity:1;transform:translate(-50%,0)}}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <div class="brand"><span class="brand-name">投稿画像一括メーカー</span><span class="brand-sub mono" id="topDims">1080 × 1350 px</span></div>
+    <div class="top-acts">
+      <label class="sr" for="fmt">保存形式</label>
+      <select id="fmt"><option value="png">PNG</option><option value="jpg">JPG</option></select>
+      <button class="btn primary" id="zipBtn" type="button">まとめて保存（ZIP）</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="editor">
+    <section class="sec" aria-labelledby="hDesign">
+      <div class="sec-h"><h2 id="hDesign">デザイン</h2></div>
+      <div class="field"><div class="lab" id="lSize">サイズ</div><div class="sizes" id="sizes" role="group" aria-labelledby="lSize"></div></div>
+      <div class="field"><div class="lab" id="lTpl">テンプレート</div><div class="tpls" id="tpls" role="group" aria-labelledby="lTpl"></div></div>
+      <div class="field"><div class="lab" id="lPal">配色</div><div class="pals" id="pals" role="group" aria-labelledby="lPal"></div>
+        <div class="inline"><label for="accent">強調色を変える</label><input type="color" id="accent" value="#1F8A6B"><button class="btn small ghost" id="accentReset" type="button" hidden>配色の色に戻す</button></div>
+      </div>
+      <div class="field"><div class="lab" id="lBg">写真がない画像の背景（自動で作ります）</div><div class="bgs" id="bgs" role="group" aria-labelledby="lBg"></div>
+        <div class="inline"><button class="btn small" id="bgShuffle" type="button">模様を変える</button><span>写真を入れた行は、写真が使われます。</span></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label class="lab" for="font">文字の種類</label><select id="font"></select></div>
+        <div class="field"><div class="lab" id="lAlign">文字のそろえ</div><div class="segbtn" id="align" role="group" aria-labelledby="lAlign"><button type="button" data-v="left">左</button><button type="button" data-v="center">中央</button></div></div>
+      </div>
+      <div class="grid2">
+        <div class="field"><label class="lab" for="handle">アカウント名（画像の下に入ります）</label><input type="text" id="handle" placeholder="@your_account" maxlength="40" autocomplete="off"></div>
+        <label class="check" for="pageNo"><input type="checkbox" id="pageNo"> ページ番号を入れる（2枚以上のとき）</label>
+      </div>
+    </section>
+
+    <section class="sec" aria-labelledby="hAI">
+      <div class="sec-h"><h2 id="hAI">AIで文章を作る</h2><span class="pill">ChatGPT・Claude・Geminiなど</span></div>
+      <p class="note">ふだん使っているAIに文章を作ってもらい、その答えを貼り付けて読み込む方法です。このツールからAIへは何も送りません。</p>
+      <ol class="steps">
+        <li class="step"><div class="step-body">
+          <div class="step-t">条件を書く</div>
+          <div class="field"><label class="lab" for="aiTheme">テーマ・伝えたいこと</label><textarea id="aiTheme" rows="3" placeholder="例：在宅ワークで集中が続くコツを、初心者向けにやさしく紹介したい"></textarea></div>
+          <div class="grid2">
+            <div class="field"><label class="lab" for="aiAud">読む人</label><input type="text" id="aiAud" placeholder="例：在宅で働きはじめた会社員"></div>
+            <div class="field"><label class="lab" for="aiTone">口調</label><select id="aiTone"><option>やさしい</option><option>ていねい</option><option>親しみやすい</option><option>専門的</option><option>熱量高め</option></select></div>
+          </div>
+          <div class="grid3">
+            <div class="field"><label class="lab" for="aiMode">作り方</label><select id="aiMode"><option value="carousel">1投稿に複数枚</option><option value="single">別々の投稿</option></select></div>
+            <div class="field"><label class="lab" for="aiCount">枚数</label><input type="number" id="aiCount" min="1" max="10" value="5" inputmode="numeric"></div>
+            <div class="field"><label class="lab" for="aiLen">本文の長さ</label><select id="aiLen"><option value="short">短め・40字</option><option value="mid">ふつう・80字</option><option value="long">長め・130字</option></select></div>
+          </div>
+        </div></li>
+        <li class="step"><div class="step-body">
+          <div class="step-t">指示文をコピーして、AIに送る</div>
+          <div class="acts"><button class="btn primary" id="aiCopy" type="button">指示文をコピー</button><span class="status" id="aiStatus" role="status" aria-live="polite"></span></div>
+          <div class="links"><a href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPTを開く</a><a href="https://claude.ai/" target="_blank" rel="noopener">Claudeを開く</a><a href="https://gemini.google.com/" target="_blank" rel="noopener">Geminiを開く</a></div>
+          <label class="sr" for="aiPrompt">AIへの指示文</label>
+          <textarea id="aiPrompt" rows="6" readonly hidden></textarea>
+        </div></li>
+        <li class="step"><div class="step-body">
+          <div class="step-t">AIの答えを貼り付けて読み込む</div>
+          <label class="sr" for="aiAnswer">AIの答え</label>
+          <textarea id="aiAnswer" rows="5" placeholder="AIの答えを、そのまま全部貼り付けてください"></textarea>
+          <div class="acts"><label class="sr" for="aiFill">入れ方</label><select id="aiFill"><option value="replace">上の行から順に入れる（画像はそのまま）</option><option value="append">いまの行の後ろに追加する</option></select><button class="btn primary" id="aiApply" type="button">読み込む</button></div>
+          <span class="status" id="ansStatus" role="status" aria-live="polite"></span>
+        </div></li>
+      </ol>
+    </section>
+
+    <section class="sec" aria-labelledby="hPosts">
+      <div class="sec-h"><h2 id="hPosts">投稿リスト</h2><span class="mono count" id="postCount">0件</span></div>
+      <div class="toolbar">
+        <button class="btn" id="bulkImgBtn" type="button">画像をまとめて追加</button>
+        <button class="btn" id="bulkTextBtn" type="button" aria-expanded="false" aria-controls="bulkPanel">文章を貼り付けて入力</button>
+        <button class="btn" id="addRow" type="button">行を追加</button>
+        <button class="btn ghost" id="clearAll" type="button">すべて消す</button>
+      </div>
+      <input type="file" id="bulkImg" accept="image/*" multiple class="sr" tabindex="-1" aria-hidden="true">
+      <input type="file" id="oneImg" accept="image/*" class="sr" tabindex="-1" aria-hidden="true">
+      <div class="bulk" id="bulkPanel" hidden>
+        <p class="note">1件ずつ「1行目がタイトル、2行目からが本文」で書き、空いた行で区切ります。本文に空いた行を入れたいときは「---」だけの行で区切ってください。Excelやスプレッドシートの「タイトル｜本文」の2列をそのまま貼り付けても読み込めます。</p>
+        <label class="sr" for="bulkText">まとめて入力する文章</label>
+        <textarea id="bulkText" rows="7" placeholder="始める時間を決める&#10;毎朝おなじ時間に机に向かう。&#10;&#10;机の上は1つの作業だけ&#10;関係ない物は見えない所へ。"></textarea>
+        <div class="acts"><label class="sr" for="bulkFill">入れ方</label><select id="bulkFill"><option value="replace">上の行から順に入れる（画像はそのまま）</option><option value="append">いまの行の後ろに追加する</option></select><button class="btn primary" id="bulkApply" type="button">読み込む</button></div>
+      </div>
+      <div class="sample-note" id="sampleNote" hidden><span>サンプルを表示中です。画像や文章をまとめて入れると、サンプルは自動で消えます。</span><button class="btn small" id="clearSample" type="button">サンプルを消す</button></div>
+      <div class="rows" id="rows"></div>
+      <p class="hint">本文の言葉を <code>**</code> で囲むと強調できます（例：<code>**ここが大事**</code>）。画像はこの一覧へドラッグしても追加できます。完全に空の行は画像になりません。</p>
+    </section>
+
+    <section class="sec" aria-labelledby="hCap">
+      <div class="sec-h"><h2 id="hCap">投稿文・ハッシュタグ</h2><span class="mono count" id="capCount">0字</span></div>
+      <label class="sr" for="caption">投稿文</label>
+      <textarea id="caption" rows="5" placeholder="投稿に添える文章（AIで作ると自動で入ります）"></textarea>
+      <label class="sr" for="tags">ハッシュタグ</label>
+      <input type="text" id="tags" placeholder="#ハッシュタグ #スペースで区切る">
+      <div class="acts"><button class="btn" id="copyCap" type="button">投稿文とタグをコピー</button></div>
+    </section>
+  </div>
+
+  <aside class="sheet" id="sheet" aria-labelledby="hSheet">
+    <div class="sheet-h"><h2 id="hSheet">プレビュー</h2><span class="mono" id="sheetMeta"></span><button class="btn small dock-toggle" id="dockToggle" type="button" aria-expanded="true" aria-controls="frames">隠す</button></div>
+    <div class="frames" id="frames"></div>
+    <p class="sheet-empty" id="sheetEmpty" hidden>これは見本です。投稿リストにタイトル・本文・画像を入れると、ここにあなたの投稿画像が並びます。</p>
+    <p class="sheet-hint">画像を押すと大きく表示して、1枚ずつ保存できます。</p>
+    <p class="sheet-hint">画像や入力した文章は、この端末の中だけで処理します。外部には送信しません。</p>
+  </aside>
+</main>
+
+<div class="modal" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="mNo">
+  <div class="modal-in">
+    <div class="modal-bar">
+      <span class="mono" id="mNo">1 / 1</span>
+      <div class="acts">
+        <button class="btn" id="mPrev" type="button">前へ</button>
+        <button class="btn" id="mNext" type="button">次へ</button>
+        <button class="btn primary" id="mSave" type="button">この1枚を保存</button>
+        <button class="btn" id="mClose" type="button">閉じる</button>
+      </div>
+    </div>
+    <div class="modal-stage"><canvas id="mCanvas" width="10" height="10"></canvas></div>
+    <p class="modal-warn" id="mWarn" hidden>文字が入りきらず、最後を「…」で省いています。本文を短くするか、別のテンプレートを試してください。</p>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden role="status" aria-live="polite"><span id="toastMsg"></span><button class="toast-act" id="toastAct" type="button" hidden>元に戻す</button></div>
+
+<script>
+(function(){
+'use strict';
+
+/* ========== 基本 ========== */
+const $ = (s, r) => (r || document).querySelector(s);
+const uid = () => { try { return crypto.randomUUID(); } catch (e) { return 'p' + Date.now().toString(36) + Math.random().toString(36).slice(2, 9); } };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const DPR = () => Math.min(2, window.devicePixelRatio || 1);
+
+const SIZES = {
+  sq: { w: 1080, h: 1080, name: '正方形', ratio: '1:1', fw: 170 },
+  pt: { w: 1080, h: 1350, name: '縦長', ratio: '4:5', fw: 160 },
+  st: { w: 1080, h: 1920, name: 'ストーリー', ratio: '9:16', fw: 130 },
+  ls: { w: 1600, h: 900, name: '横長', ratio: '16:9', fw: 230 },
+};
+const TEMPLATES = { card: 'カード', split: '上下分割', overlay: '写真全面', marker: 'マーカー', type: '文字メイン' };
+const PALETTES = {
+  mint:   { name: 'ミント',     bg: '#E6F2EC', fg: '#14302A', sub: '#55736A', accent: '#1F8A6B', card: '#FFFFFF', hi: '#FFE27A', mark: '#A9E5CC' },
+  navy:   { name: 'ネイビー',   bg: '#14233F', fg: '#F3F5FA', sub: '#A6B2CA', accent: '#F2C14E', card: '#1E3157', hi: '#F2C14E', mark: '#6E5B26' },
+  sakura: { name: 'さくら',     bg: '#FBE9EC', fg: '#3A1E29', sub: '#8B6571', accent: '#D24F74', card: '#FFFFFF', hi: '#FFC9D7', mark: '#F8C3D1' },
+  mono:   { name: 'モノクロ',   bg: '#F1F1EF', fg: '#141414', sub: '#666664', accent: '#141414', card: '#FFFFFF', hi: '#FFE45C', mark: '#FFE45C' },
+  orange: { name: 'オレンジ',   bg: '#FFF0E1', fg: '#2C1B11', sub: '#8A6A55', accent: '#E8641C', card: '#FFFFFF', hi: '#FFD08A', mark: '#FFD2A6' },
+  lilac:  { name: 'ラベンダー', bg: '#ECE8FA', fg: '#211A3C', sub: '#6B6590', accent: '#6A4DE0', card: '#FFFFFF', hi: '#FFE27A', mark: '#D7CDFF' },
+};
+const BGS = { none: 'なし', shape: '図形', dots: 'ドット', stripe: 'しま', wave: '波', grad: 'ぼかし', auto: 'おまかせ' };
+const BG_KINDS = ['shape', 'dots', 'stripe', 'wave', 'grad'];
+const FB = ', "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", sans-serif';
+const FONTS = {
+  round:  { name: '丸ゴシック',        t: ['"M PLUS Rounded 1c"', 800], b: ['"M PLUS Rounded 1c"', 400, 700] },
+  gothic: { name: 'ゴシック',          t: ['"Noto Sans JP"', 900],      b: ['"Noto Sans JP"', 400, 700] },
+  maru:   { name: 'やわらか丸',        t: ['"Zen Maru Gothic"', 900],   b: ['"Zen Maru Gothic"', 400, 700] },
+  serif:  { name: '明朝',              t: ['"Noto Serif JP"', 900],     b: ['"Noto Serif JP"', 400, 700] },
+  heavy:  { name: '極太見出し＋ゴシック', t: ['"Dela Gothic One"', 400],  b: ['"Noto Sans JP"', 400, 700] },
+};
+const fontStr = (fam, w, size) => `${w} ${Math.max(1, Math.round(size * 10) / 10)}px ${fam}${FB}`;
+const LEN = { short: 40, mid: 80, long: 130 };
+
+const SAMPLE = {
+  posts: [
+    { title: '在宅ワークで集中が続く3つの工夫', body: '「気づいたら1時間たっていた…」を減らすために、**今日からできること**をまとめました。', art: 0 },
+    { title: '始める時間を決める', body: '毎朝おなじ時間に机に向かう。\n**始まりの合図**があると、頭が仕事モードに切りかわります。', art: 1 },
+    { title: '机の上は1つの作業だけ', body: '今やる作業に関係ない物は、見えない所へ。\n目に入る物が少ないほど**迷いが減ります**。', art: 2 },
+    { title: '休けいも予定に入れる', body: '「50分作業したら10分休む」のように、先に決めておく。\n**休むことも仕事の一部**です。', art: null },
+    { title: 'まずは1つだけ試そう', body: '全部やらなくて大丈夫。\nできそうなものを**1つだけ**選んで、1週間続けてみてください。', art: null },
+  ],
+  caption: '在宅ワークで「なんだか集中できない…」という日はありませんか？\n今日からすぐ試せる工夫を3つまとめました。\nあとで見返せるように、保存しておくのがおすすめです。',
+  tags: '#在宅ワーク #集中力 #仕事術 #時短 #働き方',
+};
+
+const DEMO_POST = { id: '__demo', title: 'タイトルが入ります', body: '本文がここに入ります。\n**強調したい言葉**は色が変わります。', image: null };
+
+const state = {
+  settings: { size: 'pt', tpl: 'card', pal: 'mint', accent: '', font: 'round', align: 'left', handle: '', pageNo: true, fmt: 'png', bg: 'shape', bgSeed: 0 },
+  ai: { theme: '', audience: '', tone: 'やさしい', mode: 'carousel', count: 5, len: 'mid', fill: 'replace' },
+  caption: '', tags: '',
+  posts: [],
+};
+
+/* ========== 色 ========== */
+function hexToRgb(h) { h = String(h || '').replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16); if (!Number.isFinite(n) || h.length !== 6) return [0, 0, 0]; return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+function rgbToHex(r, g, b) { return '#' + [r, g, b].map(v => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join(''); }
+function mix(a, b, t) { const A = hexToRgb(a), B = hexToRgb(b); return rgbToHex(A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t); }
+function lum(h) { const c = hexToRgb(h).map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; }
+const onColor = h => lum(h) > 0.45 ? '#16181A' : '#FFFFFF';
+function getPal() {
+  const p = Object.assign({}, PALETTES[state.settings.pal] || PALETTES.mint);
+  if (state.settings.accent) {
+    p.accent = state.settings.accent;
+    p.mark = lum(p.card) < 0.2 ? mix(p.accent, p.card, 0.5) : mix(p.accent, p.card, 0.68);
+  }
+  return p;
+}
+
+/* ========== 文字組み（日本語の改行・禁則・自動縮小） ========== */
+const segmenter = (typeof Intl !== 'undefined' && Intl.Segmenter) ? new Intl.Segmenter('ja', { granularity: 'grapheme' }) : null;
+const graphemes = s => segmenter ? Array.from(segmenter.segment(s), x => x.segment) : Array.from(s);
+const NO_START_HANG = new Set(Array.from('、。，．,.!?！？」』）)】〕〉》］]｝}…‥:;：；'));
+const NO_START_PUSH = new Set(Array.from('ぁぃぅぇぉっゃゅょゎゕゖァィゥェォッャュョヮヵヶーゝゞヽヾ々〻'));
+const NO_END = new Set(Array.from('「『（(【〔〈《［[｛{'));
+const LATIN = /^[A-Za-z0-9'’\-_%&@#+.,:/]$/;
+const stripMarks = s => String(s || '').replace(/\*\*/g, '');
+
+function parseRuns(text) {
+  const runs = []; const re = /\*\*([\s\S]+?)\*\*/g; let last = 0, m;
+  while ((m = re.exec(text))) { if (m.index > last) runs.push({ t: text.slice(last, m.index), em: false }); runs.push({ t: m[1], em: true }); last = re.lastIndex; }
+  if (last < text.length) runs.push({ t: text.slice(last), em: false });
+  return runs;
+}
+function tokenize(text) {
+  text = String(text || '').replace(/\r\n?/g, '\n').replace(/\s+$/, '');
+  const toks = [];
+  for (const r of parseRuns(text)) {
+    for (const g of graphemes(r.t)) {
+      if (g === '\n') { toks.push({ br: true }); continue; }
+      const last = toks[toks.length - 1];
+      const lat = LATIN.test(g);
+      if (lat && last && !last.br && last.latin && last.em === r.em) { last.t += g; continue; }
+      toks.push({ t: g, em: r.em, latin: lat, sp: /^\s$/.test(g) });
+    }
+  }
+  return toks;
+}
+const mcache = new Map();
+function mw(ctx, font, t) {
+  const k = font + '\u0001' + t; let v = mcache.get(k);
+  if (v === undefined) { ctx.font = font; v = ctx.measureText(t).width; if (mcache.size > 40000) mcache.clear(); mcache.set(k, v); }
+  return v;
+}
+function breakLines(ctx, toks, fonts, maxW) {
+  const width = t => mw(ctx, t.em ? fonts.e : fonts.n, t.t);
+  const q = toks.slice(); const lines = []; let cur = [], w = 0;
+  for (let i = 0; i < q.length; i++) {
+    const t = q[i];
+    if (t.br) { lines.push(cur); cur = []; w = 0; continue; }
+    let tw = width(t);
+    if (t.latin && t.t.length > 1 && tw > maxW) { q.splice(i, 1, ...Array.from(t.t).map(c => ({ t: c, em: t.em, latin: false, sp: false }))); i--; continue; }
+    if (cur.length && w + tw > maxW) {
+      if (t.sp) { lines.push(cur); cur = []; w = 0; continue; }
+      if (NO_START_HANG.has(t.t)) { cur.push(t); w += tw; continue; }
+      const carry = [];
+      if (NO_START_PUSH.has(t.t[0]) && cur.length > 1) carry.unshift(cur.pop());
+      while (cur.length > 1 && NO_END.has(cur[cur.length - 1].t.slice(-1))) carry.unshift(cur.pop());
+      lines.push(cur); cur = carry; w = carry.reduce((a, c) => a + width(c), 0);
+    }
+    if (!cur.length && t.sp) continue;
+    cur.push(t); w += tw;
+  }
+  lines.push(cur);
+  while (lines.length && !lines[lines.length - 1].length) lines.pop();
+  return lines.map(l => { while (l.length && l[l.length - 1].sp) l.pop(); return { toks: l, w: l.reduce((a, c) => a + width(c), 0) }; });
+}
+function ellipsize(ctx, line, fonts, maxW) {
+  const ew = mw(ctx, fonts.n, '…');
+  while (line.toks.length && line.w + ew > maxW) { const t = line.toks.pop(); line.w -= mw(ctx, t.em ? fonts.e : fonts.n, t.t); }
+  line.toks.push({ t: '…', em: false }); line.w += ew;
+}
+/* o: {fam, w, ew, maxW, maxH, max, min, lh, maxLines} */
+function fit(ctx, text, o) {
+  const toks = tokenize(text);
+  const empty = { lines: [], size: o.max, h: 0, lh: o.lh, fonts: null, overflow: false };
+  if (!toks.length || o.maxW <= 0) return empty;
+  let size = o.max;
+  for (let guard = 0; guard < 80; guard++) {
+    const fonts = { n: fontStr(o.fam, o.w, size), e: fontStr(o.fam, o.ew, size) };
+    const lines = breakLines(ctx, toks, fonts, o.maxW);
+    if (!lines.length) return empty;
+    const h = lines.length * size * o.lh;
+    if (h <= o.maxH + 0.5 && (!o.maxLines || lines.length <= o.maxLines)) return { lines, size, h, lh: o.lh, fonts, overflow: false };
+    if (size <= o.min + 0.01) {
+      let n = Math.max(1, Math.floor((o.maxH + 0.5) / (size * o.lh)));
+      if (o.maxLines) n = Math.min(n, o.maxLines);
+      const keep = lines.slice(0, n);
+      ellipsize(ctx, keep[keep.length - 1], fonts, o.maxW);
+      return { lines: keep, size, h: keep.length * size * o.lh, lh: o.lh, fonts, overflow: true };
+    }
+    size = Math.max(o.min, size * 0.94);
+  }
+  return empty;
+}
+/* opts: {marker, emMarker} */
+function drawLines(ctx, b, x, y, maxW, align, color, emColor, opts) {
+  if (!b || !b.lines.length) return;
+  opts = opts || {};
+  const lhPx = b.size * b.lh;
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  b.lines.forEach((ln, i) => {
+    const cy = y + i * lhPx + lhPx / 2;
+    const sx = align === 'center' ? x + (maxW - ln.w) / 2 : x;
+    if (opts.marker && ln.w > 0) {
+      const sh = ctx.shadowColor; ctx.shadowColor = 'transparent';
+      ctx.fillStyle = opts.marker; ctx.fillRect(sx - b.size * 0.08, cy + b.size * 0.02, ln.w + b.size * 0.16, b.size * 0.44);
+      ctx.shadowColor = sh;
+    }
+    let cx = sx;
+    for (const t of ln.toks) {
+      const f = t.em ? b.fonts.e : b.fonts.n; const w = mw(ctx, f, t.t);
+      if (t.em && opts.emMarker) { const sh = ctx.shadowColor; ctx.shadowColor = 'transparent'; ctx.fillStyle = opts.emMarker; ctx.fillRect(cx, cy + b.size * 0.04, w, b.size * 0.42); ctx.shadowColor = sh; }
+      ctx.font = f; ctx.fillStyle = t.em ? emColor : color; ctx.fillText(t.t, cx, cy);
+      cx += w;
+    }
+  });
+}
+
+/* ========== 描画パーツ ========== */
+function rr(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  if (!r || r <= 0) { ctx.rect(x, y, w, h); return; }
+  r = Math.min(r, w / 2, h / 2);
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function fill(ctx, c, x, y, w, h) { ctx.fillStyle = c; ctx.fillRect(x, y, w, h); }
+function cover(ctx, img, x, y, w, h, r) {
+  if (w <= 1 || h <= 1) return;
+  if (img && img.draw) { ctx.save(); rr(ctx, x, y, w, h, r || 0); ctx.clip(); img.draw(ctx, x, y, w, h); ctx.restore(); return; }
+  const iw = img.naturalWidth || img.width, ih = img.naturalHeight || img.height; if (!iw || !ih) return;
+  const s = Math.max(w / iw, h / ih), dw = iw * s, dh = ih * s;
+  ctx.save(); rr(ctx, x, y, w, h, r || 0); ctx.clip();
+  ctx.drawImage(img, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  ctx.restore();
+}
+/* ---- 自動の背景（模様） ---- */
+function hashStr(t) { let h = 2166136261; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function rng(seed) { let a = seed >>> 0; return () => { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function rgba(hex, a) { const c = hexToRgb(hex); return `rgba(${c[0]},${c[1]},${c[2]},${a})`; }
+function patternColors(pal) {
+  const dark = lum(pal.card) < 0.2;
+  return dark
+    ? { base: mix(pal.card, '#FFFFFF', 0.07), c1: pal.accent, c2: mix(pal.accent, '#FFFFFF', 0.45), c3: pal.sub }
+    : { base: mix(pal.accent, '#FFFFFF', 0.86), c1: pal.accent, c2: mix(pal.accent, '#FFFFFF', 0.55), c3: pal.hi };
+}
+function drawPattern(ctx, kind, seed, pal, x, y, w, h) {
+  const R = rng(seed), C = patternColors(pal), m = Math.min(w, h), L = Math.hypot(w, h);
+  const pick = arr => arr[Math.floor(R() * arr.length) % arr.length];
+  ctx.save();
+  ctx.beginPath(); ctx.rect(x, y, w, h); ctx.clip();
+  ctx.fillStyle = C.base; ctx.fillRect(x, y, w, h);
+  if (kind === 'shape') {
+    const gc = 4, gr = Math.max(3, Math.round(gc * h / w)), cwid = w / gc, chei = h / gr;
+    for (let i = 0; i < gc * gr; i++) {
+      if (R() < 0.22) continue;
+      const t = R(), cx = x + ((i % gc) + 0.5 + (R() - 0.5) * 0.7) * cwid, cy = y + (Math.floor(i / gc) + 0.5 + (R() - 0.5) * 0.7) * chei;
+      const sz = Math.min(cwid, chei) * (0.35 + R() * 0.5), col = pick([C.c1, C.c2, C.c3, C.c1]);
+      ctx.save(); ctx.translate(cx, cy); ctx.rotate(R() * Math.PI); ctx.fillStyle = col; ctx.strokeStyle = col;
+      if (t < 0.28) { ctx.beginPath(); ctx.arc(0, 0, sz / 2, 0, Math.PI * 2); ctx.fill(); }
+      else if (t < 0.44) { ctx.lineWidth = sz * 0.2; ctx.beginPath(); ctx.arc(0, 0, sz * 0.42, 0, Math.PI * 2); ctx.stroke(); }
+      else if (t < 0.62) { rr(ctx, -sz / 2, -sz / 2, sz, sz, sz * 0.18); ctx.fill(); }
+      else if (t < 0.78) { ctx.beginPath(); ctx.moveTo(0, -sz * 0.55); ctx.lineTo(sz * 0.5, sz * 0.4); ctx.lineTo(-sz * 0.5, sz * 0.4); ctx.closePath(); ctx.fill(); }
+      else if (t < 0.9) { const b = sz * 0.22; ctx.fillRect(-sz / 2, -b / 2, sz, b); ctx.fillRect(-b / 2, -sz / 2, b, sz); }
+      else { ctx.beginPath(); ctx.arc(0, 0, sz / 2, 0, Math.PI); ctx.closePath(); ctx.fill(); }
+      ctx.restore();
+    }
+  } else if (kind === 'dots') {
+    const g = m / (8 + Math.floor(R() * 5)), ang = R() * Math.PI * 2, dx = Math.cos(ang), dy = Math.sin(ang);
+    const cols = Math.ceil(w / g) + 2, rows = Math.ceil(h / g) + 2;
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+      const px = x + c * g + (r % 2 ? g / 2 : 0) - g / 2, py = y + r * g - g / 2;
+      const tt = (((px - x) / w - 0.5) * dx + ((py - y) / h - 0.5) * dy) + 0.5;
+      const rad = g * 0.46 * Math.max(0.1, Math.min(1, tt * 1.15));
+      ctx.fillStyle = tt > 0.55 ? C.c1 : C.c2; ctx.beginPath(); ctx.arc(px, py, rad, 0, Math.PI * 2); ctx.fill();
+    }
+  } else if (kind === 'stripe') {
+    const ang = (R() < 0.5 ? -1 : 1) * (Math.PI / 4 + (R() - 0.5) * 0.5), sw = m / (7 + Math.floor(R() * 6)), every = 3 + Math.floor(R() * 3);
+    ctx.translate(x + w / 2, y + h / 2); ctx.rotate(ang);
+    const n = Math.ceil(L / sw) + 2;
+    for (let i = -n; i <= n; i++) { if (i % 2) continue; ctx.fillStyle = (Math.abs(i / 2) % every === 0) ? C.c1 : C.c2; ctx.fillRect(i * sw - sw / 2, -L / 2, sw, L); }
+  } else if (kind === 'wave') {
+    ctx.fillStyle = C.c3; ctx.beginPath(); ctx.arc(x + w * (0.18 + R() * 0.64), y + h * (0.16 + R() * 0.1), m * (0.08 + R() * 0.05), 0, Math.PI * 2); ctx.fill();
+    const layers = 4;
+    for (let k = 0; k < layers; k++) {
+      const by = y + h * (0.38 + k * 0.15), amp = h * (0.035 + R() * 0.045), fr = (1 + R() * 1.6) * Math.PI * 2 / w, ph = R() * Math.PI * 2;
+      ctx.beginPath(); ctx.moveTo(x, y + h); ctx.lineTo(x, by);
+      for (let i = 0; i <= 64; i++) { const px = (w * i) / 64; ctx.lineTo(x + px, by + Math.sin(px * fr + ph) * amp); }
+      ctx.lineTo(x + w, y + h); ctx.closePath(); ctx.fillStyle = mix(C.c2, C.c1, k / (layers - 1)); ctx.fill();
+    }
+  } else if (kind === 'grad') {
+    const cols = [C.c1, C.c2, C.c3, C.c1];
+    for (let k = 0; k < 4; k++) {
+      const cx = x + R() * w, cy = y + R() * h, rad = Math.max(w, h) * (0.35 + R() * 0.35);
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+      g.addColorStop(0, rgba(cols[k], 0.8)); g.addColorStop(1, rgba(cols[k], 0));
+      ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+    }
+  }
+  ctx.restore();
+}
+function autoBgFor(post, pal) {
+  const st = state.settings; if (!st.bg || st.bg === 'none') return null;
+  const seed = (hashStr(String(post.id)) ^ Math.imul((st.bgSeed | 0) + 1, 2654435761)) >>> 0;
+  const kind = st.bg === 'auto' ? BG_KINDS[seed % BG_KINDS.length] : st.bg;
+  return { draw: (ctx, x, y, w, h) => drawPattern(ctx, kind, seed, pal, x, y, w, h) };
+}
+function bar(ctx, x, y, w, h, c) { ctx.fillStyle = c; rr(ctx, x, y, w, h, h / 2); ctx.fill(); }
+const T = (S, o) => Object.assign({ fam: S.ft[0], w: S.ft[1], ew: S.ft[1], lh: 1.32 }, o);
+const B = (S, o) => Object.assign({ fam: S.fb[0], w: S.fb[1], ew: S.fb[2], lh: 1.66 }, o);
+const stackH = (t, b, gap) => t.h + b.h + (t.h && b.h ? gap : 0);
+/* o: {col, emT, emB, rule, tOpt, bOpt} */
+function stack(ctx, S, t, b, x, cw, y, gap, o) {
+  if (t.h) { drawLines(ctx, t, x, y, cw, S.align, o.col, o.emT, o.tOpt); y += t.h; }
+  if (t.h && b.h) {
+    if (o.rule) { const rw = 72 * S.u, rh = 6 * S.u; bar(ctx, S.align === 'center' ? x + (cw - rw) / 2 : x, y + gap / 2 - rh / 2, rw, rh, o.rule); }
+    y += gap;
+  }
+  if (b.h) drawLines(ctx, b, x, y, cw, S.align, o.col, o.emB, o.bOpt);
+}
+function footer(ctx, S, rx, ry, rw, rh, pad, color) {
+  if (!S.handle && !S.pageStr) return 0;
+  const fs = 26 * S.u, cy = ry + rh - pad * 0.7;
+  ctx.save(); ctx.shadowColor = 'transparent';
+  ctx.font = fontStr(S.fb[0], S.fb[2], fs); ctx.fillStyle = color; ctx.textBaseline = 'middle';
+  if (S.handle) { ctx.textAlign = 'left'; ctx.fillText(S.handle, rx + pad, cy, Math.max(10, rw - 2 * pad - (S.pageStr ? 130 * S.u : 0))); }
+  if (S.pageStr) { ctx.textAlign = 'right'; ctx.fillText(S.pageStr, rx + rw - pad, cy); }
+  ctx.restore();
+  return 42 * S.u;
+}
+const isLand = S => S.W > S.H * 1.2;
+
+/* ========== テンプレート ========== */
+function tCard(ctx, S, p, pal) {
+  const { W, H, u, P } = S;
+  fill(ctx, pal.bg, 0, 0, W, H);
+  const foot = footer(ctx, S, 0, 0, W, H, P, pal.sub);
+  const top = P, avail = H - P - foot - top, g = 44 * u;
+  const O = { col: pal.fg, emT: pal.accent, emB: pal.accent, rule: pal.accent };
+  if (isLand(S)) {
+    const gap = 60 * u;
+    const cw = S.img ? (W - 2 * P - gap) * 0.5 : Math.min(W - 2 * P, 1150 * u);
+    const x = S.img ? P : (W - cw) / 2;
+    const t = fit(ctx, p.title, T(S, { maxW: cw, maxH: avail * 0.5, max: 80 * u, min: 42 * u, maxLines: 4 }));
+    const b = fit(ctx, p.body, B(S, { maxW: cw, maxH: avail - t.h - (t.h ? g * 1.5 : 0), max: 40 * u, min: 24 * u }));
+    stack(ctx, S, t, b, x, cw, top + (avail - stackH(t, b, g * 1.5)) / 2, g * 1.5, O);
+    if (S.img) { const ix = x + cw + gap; cover(ctx, S.img, ix, top, W - P - ix, avail, 30 * u); }
+    return { overflow: t.overflow || b.overflow };
+  }
+  const x = P, cw = W - 2 * P;
+  const t = fit(ctx, p.title, T(S, { maxW: cw, maxH: avail * (S.img ? 0.27 : 0.42), max: (S.img ? 86 : 100) * u, min: 46 * u, maxLines: 4 }));
+  if (S.img) {
+    const b = fit(ctx, p.body, B(S, { maxW: cw, maxH: avail * 0.3, max: 40 * u, min: 26 * u }));
+    const ih = Math.max(avail * 0.25, avail - t.h - b.h - (t.h ? g : 0) - (b.h ? g : 0));
+    let y = top;
+    if (t.h) { drawLines(ctx, t, x, y, cw, S.align, pal.fg, pal.accent); y += t.h + g; }
+    cover(ctx, S.img, x, y, cw, ih, 30 * u); y += ih + g;
+    if (b.h) drawLines(ctx, b, x, y, cw, S.align, pal.fg, pal.accent);
+    return { overflow: t.overflow || b.overflow };
+  }
+  const gap = g * 1.6;
+  const b = fit(ctx, p.body, B(S, { maxW: cw, maxH: avail - t.h - (t.h ? gap : 0), max: 50 * u, min: 28 * u, lh: 1.75 }));
+  stack(ctx, S, t, b, x, cw, top + (avail - stackH(t, b, gap)) / 2, gap, O);
+  return { overflow: t.overflow || b.overflow };
+}
+
+function tSplit(ctx, S, p, pal) {
+  const { W, H, u, P } = S;
+  fill(ctx, pal.bg, 0, 0, W, H);
+  const g = 36 * u, O = { col: pal.fg, emT: pal.accent, emB: pal.accent, rule: pal.accent };
+  if (isLand(S)) {
+    const iw = Math.round(W * 0.5);
+    let tDone = null;
+    if (S.img) cover(ctx, S.img, 0, 0, iw, H, 0);
+    else {
+      fill(ctx, pal.accent, 0, 0, iw, H); const tc = onColor(pal.accent);
+      tDone = fit(ctx, p.title, T(S, { maxW: iw - 2 * P, maxH: H - 2 * P, max: 92 * u, min: 46 * u, maxLines: 5 }));
+      drawLines(ctx, tDone, P, (H - tDone.h) / 2, iw - 2 * P, S.align, tc, tc);
+    }
+    const foot = footer(ctx, S, iw, 0, W - iw, H, P * 0.9, pal.sub);
+    const x = iw + P * 0.9, cw = W - x - P * 0.9, top = P, avail = H - 2 * P - foot;
+    if (tDone) {
+      const b = fit(ctx, p.body, B(S, { maxW: cw, maxH: avail, max: 40 * u, min: 24 * u }));
+      drawLines(ctx, b, x, top + (avail - b.h) / 2, cw, S.align, pal.fg, pal.accent);
+      return { overflow: tDone.overflow || b.overflow };
+    }
+    const gap = g * 1.4;
+    const t = fit(ctx, p.title, T(S, { maxW: cw, maxH: avail * 0.5, max: 72 * u, min: 40 * u, maxLines: 4 }));
+    const b = fit(ctx, p.body, B(S, { maxW: cw, maxH: avail - t.h - (t.h ? gap : 0), max: 38 * u, min: 24 * u }));
+    stack(ctx, S, t, b, x, cw, top + (avail - stackH(t, b, gap)) / 2, gap, O);
+    return { overflow: t.overflow || b.overflow };
+  }
+  const ih = Math.round(H * (H / W > 1.5 ? 0.5 : 0.48));
+  let tDone = null;
+  if (S.img) cover(ctx, S.img, 0, 0, W, ih, 0);
+  else {
+    fill(ctx, pal.accent, 0, 0, W, ih); const tc = onColor(pal.accent);
+    tDone = fit(ctx, p.title, T(S, { maxW: W - 2 * P, maxH: ih - 2 * P, max: 100 * u, min: 48 * u, maxLines: 4 }));
+    drawLines(ctx, tDone, P, (ih - tDone.h) / 2, W - 2 * P, S.align, tc, tc);
+  }
+  const foot = footer(ctx, S, 0, ih, W, H - ih, P, pal.sub);
+  const x = P, cw = W - 2 * P, top = ih + P * 0.8, avail = H - P - foot - top;
+  if (tDone) {
+    const b = fit(ctx, p.body, B(S, { maxW: cw, maxH: avail, max: 44 * u, min: 26 * u, lh: 1.72 }));
+    drawLines(ctx, b, x, top + (avail - b.h) / 2, cw, S.align, pal.fg, pal.accent);
+    return { overflow: tDone.overflow || b.overflow };
+  }
+  const t = fit(ctx, p.title, T(S, { maxW: cw, maxH: avail * 0.5, max: 70 * u, min: 40 * u, maxLines: 3 }));
+  const b = fit(ctx, p.body, B(S, { maxW: cw, maxH: avail - t.h - (t.h ? g : 0), max: 38 * u, min: 24 * u }));
+  stack(ctx, S, t, b, x, cw, top, g, { col: pal.fg, emT: pal.accent, emB: pal.accent });
+  return { overflow: t.overflow || b.overflow };
+}
+
+function tOverlay(ctx, S, p, pal) {
+  const { W, H, u, P } = S;
+  if (S.img) cover(ctx, S.img, 0, 0, W, H, 0);
+  else { const gr = ctx.createLinearGradient(0, 0, W, H); gr.addColorStop(0, pal.accent); gr.addColorStop(1, mix(pal.accent, '#000000', 0.5)); ctx.fillStyle = gr; ctx.fillRect(0, 0, W, H); }
+  const sh = ctx.createLinearGradient(0, H * 0.25, 0, H);
+  sh.addColorStop(0, 'rgba(0,0,0,0)'); sh.addColorStop(0.5, 'rgba(0,0,0,0.42)'); sh.addColorStop(1, 'rgba(0,0,0,0.8)');
+  ctx.fillStyle = sh; ctx.fillRect(0, 0, W, H);
+  const foot = footer(ctx, S, 0, 0, W, H, P, 'rgba(255,255,255,0.88)');
+  const land = isLand(S);
+  const cw = land ? Math.min(W - 2 * P, 1000 * u) : W - 2 * P;
+  const x = S.align === 'center' ? (W - cw) / 2 : P;
+  const bot = H - P - foot, g = 30 * u;
+  const b = fit(ctx, p.body, B(S, { maxW: cw, maxH: H * (land ? 0.3 : 0.24), max: 40 * u, min: 26 * u }));
+  const t = fit(ctx, p.title, T(S, { maxW: cw, maxH: H * (land ? 0.34 : 0.3), max: 88 * u, min: 46 * u, maxLines: 4 }));
+  const by = bot - b.h, ty = by - (t.h && b.h ? g : 0) - t.h;
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.35)'; ctx.shadowBlur = 14 * u * (S.scale || 1);
+  if (t.h) { bar(ctx, S.align === 'center' ? x + cw / 2 - 34 * u : x, ty - 40 * u, 68 * u, 8 * u, pal.hi); drawLines(ctx, t, x, ty, cw, S.align, '#FFFFFF', pal.hi); }
+  if (b.h) drawLines(ctx, b, x, by, cw, S.align, 'rgba(255,255,255,0.95)', pal.hi);
+  ctx.restore();
+  return { overflow: t.overflow || b.overflow };
+}
+
+function tMarker(ctx, S, p, pal) {
+  const { W, H, u } = S;
+  fill(ctx, pal.accent, 0, 0, W, H);
+  const M = 46 * u, cx = M, cy = M, cW = W - 2 * M, cH = H - 2 * M;
+  ctx.fillStyle = pal.card; rr(ctx, cx, cy, cW, cH, 36 * u); ctx.fill();
+  const Pi = 64 * u;
+  const foot = footer(ctx, S, cx, cy, cW, cH, Pi, pal.sub);
+  const x = cx + Pi, top = cy + Pi, avail = cy + cH - Pi - foot - top, g = 40 * u;
+  const O = { col: pal.fg, emT: pal.accent, emB: pal.fg, tOpt: { marker: pal.mark }, bOpt: { emMarker: pal.mark } };
+  const land = isLand(S);
+  if (land && S.img) {
+    const gap = 52 * u, cw = (cW - 2 * Pi - gap) * 0.52;
+    const t = fit(ctx, p.title, T(S, { maxW: cw, maxH: avail * 0.5, max: 76 * u, min: 40 * u, lh: 1.5, maxLines: 4 }));
+    const b = fit(ctx, p.body, B(S, { maxW: cw, maxH: avail - t.h - (t.h ? g : 0), max: 38 * u, min: 24 * u }));
+    stack(ctx, S, t, b, x, cw, top + (avail - stackH(t, b, g)) / 2, g, O);
+    const ix = x + cw + gap; cover(ctx, S.img, ix, top, cx + cW - Pi - ix, avail, 22 * u);
+    return { overflow: t.overflow || b.overflow };
+  }
+  const cw = land ? Math.min(cW - 2 * Pi, 1150 * u) : cW - 2 * Pi;
+  const tx = land ? cx + (cW - cw) / 2 : x;
+  const t = fit(ctx, p.title, T(S, { maxW: cw, maxH: avail * (S.img ? 0.3 : 0.45), max: 82 * u, min: 42 * u, lh: 1.5, maxLines: 4 }));
+  if (S.img) {
+    const b = fit(ctx, p.body, B(S, { maxW: cw, maxH: avail * 0.3, max: 38 * u, min: 24 * u }));
+    const ih = Math.max(avail * 0.22, avail - t.h - b.h - (t.h ? g : 0) - (b.h ? g : 0));
+    let y = top;
+    if (t.h) { drawLines(ctx, t, tx, y, cw, S.align, pal.fg, pal.accent, O.tOpt); y += t.h + g; }
+    cover(ctx, S.img, tx, y, cw, ih, 22 * u); y += ih + g;
+    if (b.h) drawLines(ctx, b, tx, y, cw, S.align, pal.fg, pal.fg, O.bOpt);
+    return { overflow: t.overflow || b.overflow };
+  }
+  const gap = g * 1.4;
+  const b = fit(ctx, p.body, B(S, { maxW: cw, maxH: avail - t.h - (t.h ? gap : 0), max: 44 * u, min: 26 * u, lh: 1.78 }));
+  stack(ctx, S, t, b, tx, cw, top + (avail - stackH(t, b, gap)) / 2, gap, O);
+  return { overflow: t.overflow || b.overflow };
+}
+
+function tType(ctx, S, p, pal) {
+  const { W, H, u, P } = S;
+  fill(ctx, pal.bg, 0, 0, W, H);
+  const foot = footer(ctx, Object.assign({}, S, { pageStr: S.showNo ? '' : S.pageStr }), 0, 0, W, H, P, pal.sub);
+  const land = isLand(S);
+  const cw = land ? Math.min(W - 2 * P, 1200 * u) : W - 2 * P;
+  const x = land ? (W - cw) / 2 : P;
+  let top = P; const bot = H - P - foot;
+  let headH = 0;
+  if (S.showNo) {
+    const ns = String(S.idx + 1).padStart(2, '0'), fs = 128 * u;
+    const f = fontStr(S.ft[0], S.ft[1], fs); ctx.font = f; ctx.fillStyle = pal.accent; ctx.textBaseline = 'alphabetic'; ctx.textAlign = 'left';
+    const nx = S.align === 'center' && !S.img ? x + (cw - ctx.measureText(ns).width) / 2 : x;
+    ctx.fillText(ns, nx, top + fs * 0.88); headH = fs;
+  }
+  if (S.img) { const is = 230 * u; cover(ctx, S.img, x + cw - is, top, is, is, 28 * u); headH = Math.max(headH, is); }
+  if (headH) top += headH + 56 * u;
+  const avail = bot - top, gap = 44 * u * 1.6;
+  const t = fit(ctx, p.title, T(S, { maxW: cw, maxH: avail * 0.55, max: 104 * u, min: 52 * u, lh: 1.28, maxLines: 5 }));
+  const b = fit(ctx, p.body, B(S, { maxW: cw, maxH: avail - t.h - (t.h ? gap : 0), max: 44 * u, min: 28 * u, lh: 1.75 }));
+  const y = headH ? top : top + (avail - stackH(t, b, gap)) / 2;
+  stack(ctx, S, t, b, x, cw, y, gap, { col: pal.fg, emT: pal.accent, emB: pal.accent, rule: pal.accent });
+  return { overflow: t.overflow || b.overflow };
+}
+const TPL_FN = { card: tCard, split: tSplit, overlay: tOverlay, marker: tMarker, type: tType };
+
+function renderPost(ctx, W, H, post, idx, total, useThumb, tplOverride, scale) {
+  const st = state.settings, pal = getPal(), F = FONTS[st.font] || FONTS.round;
+  const u = Math.min(W, H) / 1080;
+  const S = {
+    W, H, u, P: 84 * u, align: st.align, scale: scale || 1,
+    handle: String(st.handle || '').trim(),
+    pageStr: (st.pageNo && total > 1) ? `${idx + 1} / ${total}` : '',
+    showNo: !!(st.pageNo && total > 1), idx, total,
+    ft: F.t, fb: F.b,
+    img: post.image ? (useThumb ? post.image.thumb : post.image.img) : autoBgFor(post, pal),
+  };
+  ctx.save(); ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  let r = {};
+  try { r = (TPL_FN[tplOverride || st.tpl] || tCard)(ctx, S, post, pal) || {}; }
+  finally { ctx.restore(); }
+  return r;
+}
+
+/* ========== 画像 ========== */
+async function loadImage(blob) {
+  const url = URL.createObjectURL(blob);
+  const img = new Image(); img.decoding = 'async'; img.src = url;
+  try { await img.decode(); } catch (e) { URL.revokeObjectURL(url); throw new Error('decode'); }
+  if (!img.naturalWidth) { URL.revokeObjectURL(url); throw new Error('decode'); }
+  const max = 1400, s = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(img.naturalWidth * s)); c.height = Math.max(1, Math.round(img.naturalHeight * s));
+  const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(img, 0, 0, c.width, c.height);
+  return { blob, img, thumb: c, url };
+}
+function sampleArt(kind) {
+  const c = document.createElement('canvas'); c.width = 1200; c.height = 900; const g = c.getContext('2d');
+  const P = [['#BFE3D3', '#6FB59A', '#2A7A60'], ['#FFDCC0', '#F3A26B', '#B8561F'], ['#DCD3FA', '#A895EE', '#5640C2']][kind];
+  const gr = g.createLinearGradient(0, 0, 1200, 900); gr.addColorStop(0, P[0]); gr.addColorStop(1, P[1]); g.fillStyle = gr; g.fillRect(0, 0, 1200, 900);
+  for (const [x, y, r, a] of [[230, 170, 280, .38], [1010, 730, 330, .25], [960, 130, 170, .3]]) {
+    const rg = g.createRadialGradient(x, y, 0, x, y, r); rg.addColorStop(0, `rgba(255,255,255,${a})`); rg.addColorStop(1, 'rgba(255,255,255,0)'); g.fillStyle = rg; g.fillRect(0, 0, 1200, 900);
+  }
+  g.fillStyle = 'rgba(255,255,255,.5)'; g.fillRect(0, 650, 1200, 250);
+  g.fillStyle = P[2]; g.strokeStyle = P[2];
+  if (kind === 0) {
+    rr(g, 330, 300, 470, 310, 22); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.88)'; rr(g, 354, 324, 422, 262, 10); g.fill();
+    g.fillStyle = P[1]; for (let i = 0; i < 5; i++) { rr(g, 390, 360 + i * 42, i % 2 ? 220 : 300, 16, 8); g.fill(); }
+    g.fillStyle = P[2]; rr(g, 270, 610, 590, 40, 14); g.fill();
+    rr(g, 900, 500, 130, 150, 20); g.fill(); g.lineWidth = 18; g.beginPath(); g.arc(1030, 572, 36, -Math.PI / 2, Math.PI / 2); g.stroke();
+  } else if (kind === 1) {
+    g.beginPath(); g.arc(600, 390, 235, 0, Math.PI * 2); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.94)'; g.beginPath(); g.arc(600, 390, 205, 0, Math.PI * 2); g.fill();
+    g.fillStyle = P[2]; for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2; g.beginPath(); g.arc(600 + Math.cos(a) * 172, 390 + Math.sin(a) * 172, i % 3 ? 7 : 12, 0, Math.PI * 2); g.fill(); }
+    g.lineCap = 'round'; g.lineWidth = 22; g.beginPath(); g.moveTo(600, 390); g.lineTo(600, 262); g.stroke();
+    g.lineWidth = 16; g.beginPath(); g.moveTo(600, 390); g.lineTo(705, 445); g.stroke();
+    g.beginPath(); g.arc(600, 390, 16, 0, Math.PI * 2); g.fill();
+  } else {
+    g.save(); g.translate(560, 470); g.rotate(-0.07);
+    rr(g, -270, -195, 540, 370, 18); g.fill();
+    g.fillStyle = 'rgba(255,255,255,.94)'; rr(g, -250, -175, 500, 330, 10); g.fill();
+    g.strokeStyle = P[1]; g.lineWidth = 5; for (let i = 0; i < 6; i++) { g.beginPath(); g.moveTo(-210, -120 + i * 46); g.lineTo(i === 5 ? 60 : 210, -120 + i * 46); g.stroke(); }
+    g.restore();
+    g.save(); g.translate(950, 540); g.rotate(-0.55); g.fillStyle = P[2]; rr(g, -13, -170, 26, 300, 13); g.fill(); g.beginPath(); g.moveTo(-13, 130); g.lineTo(13, 130); g.lineTo(0, 168); g.closePath(); g.fill(); g.restore();
+  }
+  g.font = '500 26px "IBM Plex Mono", monospace'; g.fillStyle = 'rgba(0,0,0,.38)'; g.textAlign = 'center'; g.fillText('SAMPLE', 600, 872);
+  return new Promise(res => c.toBlob(res, 'image/jpeg', 0.9));
+}
+
+/* ========== 保存（ブラウザ内） ========== */
+let dbP = null;
+function idb() {
+  if (dbP) return dbP;
+  dbP = new Promise((res, rej) => {
+    try {
+      const r = indexedDB.open('sns-post-maker', 1);
+      r.onupgradeneeded = () => r.result.createObjectStore('kv');
+      r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error);
+    } catch (e) { rej(e); }
+  });
+  return dbP;
+}
+async function idbSet(k, v) { try { const db = await idb(); await new Promise((res, rej) => { const tx = db.transaction('kv', 'readwrite'); tx.objectStore('kv').put(v, k); tx.oncomplete = res; tx.onerror = () => rej(tx.error); tx.onabort = () => rej(tx.error); }); return true; } catch (e) { return false; } }
+async function idbGet(k) { try { const db = await idb(); return await new Promise((res, rej) => { const tx = db.transaction('kv', 'readonly'); const rq = tx.objectStore('kv').get(k); rq.onsuccess = () => res(rq.result); rq.onerror = () => rej(rq.error); }); } catch (e) { return undefined; } }
+let saveTimer = 0;
+function save() { clearTimeout(saveTimer); saveTimer = setTimeout(doSave, 500); }
+function doSave() {
+  return idbSet('state', {
+    v: 1, settings: state.settings, ai: state.ai, caption: state.caption, tags: state.tags,
+    posts: state.posts.map(p => ({ id: p.id, title: p.title, body: p.body, sample: !!p.sample, blob: p.image ? p.image.blob : null })),
+  });
+}
+async function restore() {
+  const d = await idbGet('state');
+  if (!d || !Array.isArray(d.posts)) return false;
+  const s = d.settings || {};
+  if (SIZES[s.size]) state.settings.size = s.size;
+  if (TEMPLATES[s.tpl]) state.settings.tpl = s.tpl;
+  if (PALETTES[s.pal]) state.settings.pal = s.pal;
+  if (FONTS[s.font]) state.settings.font = s.font;
+  if (s.align === 'left' || s.align === 'center') state.settings.align = s.align;
+  if (/^#[0-9a-fA-F]{6}$/.test(s.accent || '')) state.settings.accent = s.accent;
+  if (typeof s.handle === 'string') state.settings.handle = s.handle.slice(0, 40);
+  if (typeof s.pageNo === 'boolean') state.settings.pageNo = s.pageNo;
+  if (s.fmt === 'png' || s.fmt === 'jpg') state.settings.fmt = s.fmt;
+  if (BGS[s.bg]) state.settings.bg = s.bg;
+  if (Number.isFinite(+s.bgSeed)) state.settings.bgSeed = Math.abs(Math.round(+s.bgSeed)) % 100000;
+  const a = d.ai || {};
+  for (const k of ['theme', 'audience', 'tone', 'mode', 'len', 'fill']) if (typeof a[k] === 'string') state.ai[k] = a[k];
+  if (Number.isFinite(+a.count)) state.ai.count = Math.min(10, Math.max(1, Math.round(+a.count)));
+  state.caption = typeof d.caption === 'string' ? d.caption : '';
+  state.tags = typeof d.tags === 'string' ? d.tags : '';
+  state.posts = await Promise.all(d.posts.map(async p => {
+    const post = { id: String(p.id || uid()), title: String(p.title || ''), body: String(p.body || ''), sample: !!p.sample, image: null };
+    if (p.blob) { try { post.image = await loadImage(p.blob); } catch (e) {} }
+    return post;
+  }));
+  return true;
+}
+async function loadSample() {
+  const arts = await Promise.all([0, 1, 2].map(k => sampleArt(k).then(b => b ? loadImage(b) : null).catch(() => null)));
+  state.posts = SAMPLE.posts.map(s => ({ id: uid(), title: s.title, body: s.body, sample: true, image: s.art == null ? null : arts[s.art] }));
+  state.caption = SAMPLE.caption; state.tags = SAMPLE.tags;
+  state.ai.theme = '在宅ワークで集中が続くコツを、初心者向けにやさしく紹介したい';
+  state.ai.audience = '在宅で働きはじめた会社員';
+}
+
+/* ========== 投稿データ操作 ========== */
+const newPost = (o) => ({ id: uid(), title: (o && o.title) || '', body: (o && o.body) || '', image: (o && o.image) || null, sample: false });
+const isActive = p => !!(p.title.trim() || stripMarks(p.body).trim() || p.image);
+const activePosts = () => state.posts.filter(isActive);
+const snap = () => ({ posts: state.posts.map(p => Object.assign({}, p)), caption: state.caption, tags: state.tags });
+function restoreSnap(s) {
+  state.posts = s.posts.map(p => Object.assign({}, p)); state.caption = s.caption; state.tags = s.tags;
+  renderRows(); syncCaptionUI(); markAll(); save(); toast('元に戻しました');
+}
+function clearSampleRows() {
+  const had = state.posts.some(p => p.sample);
+  if (!had) return false;
+  state.posts = state.posts.filter(p => !p.sample);
+  if (state.caption === SAMPLE.caption) { state.caption = ''; if (state.tags === SAMPLE.tags) state.tags = ''; syncCaptionUI(); }
+  return true;
+}
+function applyTexts(list, mode) {
+  clearSampleRows();
+  if (mode === 'replace') {
+    list.forEach((s, i) => {
+      const p = state.posts[i];
+      if (p) { p.title = s.title; p.body = s.body; p.sample = false; } else state.posts.push(newPost(s));
+    });
+  } else list.forEach(s => state.posts.push(newPost(s)));
+  renderRows(); markAll(); save();
+}
+function parseTSV(text) {
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { f += '"'; i++; } else q = false; } else f += c; }
+    else if (c === '"' && f === '') q = true;
+    else if (c === '\t') { row.push(f); f = ''; }
+    else if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; }
+    else f += c;
+  }
+  row.push(f); rows.push(row);
+  return rows.filter(r => r.some(x => x.trim()));
+}
+function parseBulk(text) {
+  text = String(text || '').replace(/\r\n?/g, '\n').trim();
+  if (!text) return [];
+  if (text.includes('\t')) {
+    let rows = parseTSV(text);
+    if (rows.length && /^(タイトル|見出し|title)$/i.test((rows[0][0] || '').trim())) rows = rows.slice(1);
+    return rows.map(r => ({ title: (r[0] || '').trim(), body: (r[1] || '').trim() })).filter(x => x.title || x.body);
+  }
+  const blocks = /^\s*-{3,}\s*$/m.test(text) ? text.split(/^\s*-{3,}\s*$/m) : text.split(/\n[ \t　]*\n/);
+  return blocks.map(b => {
+    const lines = b.replace(/^\n+|\n+$/g, '').split('\n');
+    return { title: (lines.shift() || '').trim(), body: lines.join('\n').trim() };
+  }).filter(x => x.title || x.body);
+}
+
+/* ========== 画面：静的部品 ========== */
+const els = {};
+['sizes','tpls','pals','bgs','bgShuffle','accent','accentReset','font','align','handle','pageNo','fmt','zipBtn','topDims','aiTheme','aiAud','aiTone','aiMode','aiCount','aiLen','aiFill','aiCopy','aiPrompt','aiAnswer','aiApply','ansStatus','aiStatus','postCount','bulkImgBtn','bulkImg','oneImg','bulkTextBtn','bulkPanel','bulkText','bulkFill','bulkApply','addRow','clearAll','sampleNote','clearSample','rows','caption','tags','copyCap','capCount','frames','sheetEmpty','sheetMeta','sheet','dockToggle','modal','mNo','mPrev','mNext','mSave','mClose','mCanvas','mWarn','toast','toastMsg','toastAct'].forEach(id => els[id] = document.getElementById(id));
+
+const tplCanvases = {};
+const bgCanvases = {};
+function buildStatic() {
+  for (const [k, s] of Object.entries(SIZES)) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'opt size-opt'; b.dataset.v = k;
+    const ar = s.w / s.h;
+    b.innerHTML = `<span class="shape"><i style="width:${Math.min(22, ar >= 1 ? 22 : 26 * ar)}px;aspect-ratio:${s.w}/${s.h}"></i></span><span><b>${s.name}<span class="rt mono">${s.ratio}</span></b><span class="mono">${s.w}×${s.h}</span></span>`;
+    b.addEventListener('click', () => setSetting('size', k));
+    els.sizes.appendChild(b);
+  }
+  for (const [k, name] of Object.entries(TEMPLATES)) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'opt tpl'; b.dataset.v = k;
+    const c = document.createElement('canvas'); c.width = 10; c.height = 10; c.setAttribute('aria-hidden', 'true');
+    b.appendChild(c); b.appendChild(document.createTextNode(name));
+    b.addEventListener('click', () => setSetting('tpl', k));
+    tplCanvases[k] = c; els.tpls.appendChild(b);
+  }
+  for (const [k, p] of Object.entries(PALETTES)) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'opt pal'; b.dataset.v = k;
+    b.innerHTML = `<span class="sw"><i style="background:${p.bg}"></i><i style="background:${p.accent}"></i><i style="background:${p.fg}"></i></span>${p.name}`;
+    b.addEventListener('click', () => { state.settings.accent = ''; setSetting('pal', k); });
+    els.pals.appendChild(b);
+  }
+  for (const [k, name] of Object.entries(BGS)) {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'opt bgopt'; b.dataset.v = k;
+    const c = document.createElement('canvas'); c.width = 10; c.height = 10; c.setAttribute('aria-hidden', 'true');
+    b.appendChild(c); b.appendChild(document.createTextNode(name));
+    b.addEventListener('click', () => setSetting('bg', k));
+    bgCanvases[k] = c; els.bgs.appendChild(b);
+  }
+  for (const [k, f] of Object.entries(FONTS)) { const o = document.createElement('option'); o.value = k; o.textContent = f.name; els.font.appendChild(o); }
+}
+function setSetting(k, v) { state.settings[k] = v; syncSettingsUI(); markAll(); save(); }
+function syncSettingsUI() {
+  const st = state.settings, sz = SIZES[st.size];
+  for (const b of els.sizes.children) b.setAttribute('aria-pressed', String(b.dataset.v === st.size));
+  for (const b of els.tpls.children) b.setAttribute('aria-pressed', String(b.dataset.v === st.tpl));
+  for (const b of els.pals.children) b.setAttribute('aria-pressed', String(b.dataset.v === st.pal));
+  for (const b of els.align.children) b.setAttribute('aria-pressed', String(b.dataset.v === st.align));
+  for (const b of els.bgs.children) b.setAttribute('aria-pressed', String(b.dataset.v === st.bg));
+  els.bgShuffle.disabled = !st.bg || st.bg === 'none';
+  els.font.value = st.font; els.handle.value = st.handle; els.pageNo.checked = !!st.pageNo; els.fmt.value = st.fmt;
+  els.accent.value = getPal().accent.toLowerCase(); els.accentReset.hidden = !st.accent;
+  els.topDims.textContent = `${sz.w} × ${sz.h} px`;
+  els.frames.style.setProperty('--fw', sz.fw + 'px');
+}
+function syncAIUI() {
+  const a = state.ai;
+  els.aiTheme.value = a.theme; els.aiAud.value = a.audience; els.aiTone.value = a.tone; els.aiMode.value = a.mode;
+  els.aiCount.value = a.count; els.aiLen.value = a.len; els.aiFill.value = a.fill;
+}
+function syncCaptionUI() { els.caption.value = state.caption; els.tags.value = state.tags; updateCapCount(); }
+function updateCapCount() { els.capCount.textContent = graphemes(state.caption).filter(g => g !== '\n').length + '字'; }
+
+/* ========== 画面：投稿リスト ========== */
+const rowRefs = new Map();
+let oneImgTarget = null;
+const countChars = s => graphemes(stripMarks(s)).filter(g => g !== '\n').length;
+function renderRows() {
+  const box = els.rows; box.textContent = ''; rowRefs.clear();
+  if (!state.posts.length) {
+    const e = document.createElement('div'); e.className = 'rows-empty';
+    e.innerHTML = 'まだ投稿がありません。<br>「画像をまとめて追加」「文章を貼り付けて入力」「行を追加」か、上の「AIで文章を作る」から始めます。';
+    box.appendChild(e);
+  }
+  state.posts.forEach((p, i) => box.appendChild(rowEl(p, i)));
+  els.sampleNote.hidden = !state.posts.some(p => p.sample);
+  updateCounts();
+}
+function rowEl(p, i) {
+  const r = document.createElement('article'); r.className = 'row'; r.dataset.id = p.id;
+  r.innerHTML = `
+    <div class="row-side">
+      <span class="row-no mono"></span>
+      <button class="thumb" type="button"></button>
+    </div>
+    <div class="row-fields">
+      <div class="fl"><label class="lab" for="t-${p.id}">タイトル</label><input type="text" id="t-${p.id}" maxlength="80" autocomplete="off"></div>
+      <div class="fl"><label class="lab" for="b-${p.id}">本文<span class="cnt mono"></span></label><textarea id="b-${p.id}" rows="3"></textarea></div>
+      <div class="row-acts">
+        <button class="btn small ghost" type="button" data-act="unimg">画像を外す</button>
+        <span class="row-warn" hidden>文字が入りきっていません</span>
+        <span class="sp"></span>
+        <button class="btn small ghost" type="button" data-act="up" aria-label="上へ移動">↑</button>
+        <button class="btn small ghost" type="button" data-act="down" aria-label="下へ移動">↓</button>
+        <button class="btn small ghost" type="button" data-act="dup">複製</button>
+        <button class="btn small ghost" type="button" data-act="del">削除</button>
+      </div>
+    </div>`;
+  const ref = { el: r, no: $('.row-no', r), thumb: $('.thumb', r), t: $('input', r), b: $('textarea', r), cnt: $('.cnt', r), warn: $('.row-warn', r), unimg: $('[data-act="unimg"]', r) };
+  ref.t.value = p.title; ref.b.value = p.body;
+  ref.b.rows = Math.min(6, Math.max(3, p.body.split('\n').length + 1));
+  setThumb(ref, p);
+  ref.cnt.textContent = countChars(p.body) + '字';
+  $('[data-act="up"]', r).disabled = i === 0;
+  $('[data-act="down"]', r).disabled = i === state.posts.length - 1;
+  const onEdit = (field, val) => {
+    const was = isActive(p); p[field] = val; p.sample = false;
+    if (field === 'body') ref.cnt.textContent = countChars(val) + '字';
+    if (was !== isActive(p)) markAll(); else markPost(p.id);
+    els.sampleNote.hidden = !state.posts.some(x => x.sample);
+    save();
+  };
+  ref.t.addEventListener('input', () => onEdit('title', ref.t.value));
+  ref.b.addEventListener('input', () => onEdit('body', ref.b.value));
+  ref.thumb.addEventListener('click', () => { oneImgTarget = p.id; els.oneImg.value = ''; els.oneImg.click(); });
+  ref.thumb.addEventListener('dragover', e => { if (hasFiles(e)) { e.preventDefault(); e.stopPropagation(); ref.thumb.classList.add('drop'); } });
+  ref.thumb.addEventListener('dragleave', () => ref.thumb.classList.remove('drop'));
+  ref.thumb.addEventListener('drop', e => { e.preventDefault(); e.stopPropagation(); ref.thumb.classList.remove('drop'); const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0]; if (f) setRowImage(p.id, f); });
+  r.addEventListener('click', e => {
+    const b = e.target.closest('button[data-act]'); if (!b) return;
+    rowAction(p, b.dataset.act, b);
+  });
+  rowRefs.set(p.id, ref);
+  return r;
+}
+function setThumb(ref, p) {
+  ref.thumb.textContent = '';
+  if (p.image) { const im = document.createElement('img'); im.src = p.image.url; im.alt = ''; ref.thumb.appendChild(im); ref.thumb.classList.add('has'); ref.thumb.setAttribute('aria-label', '画像を変える'); }
+  else { ref.thumb.innerHTML = '画像を<br>選ぶ'; ref.thumb.classList.remove('has'); ref.thumb.setAttribute('aria-label', '画像を選ぶ'); }
+  ref.unimg.hidden = !p.image;
+}
+function rowAction(p, act, btn) {
+  const i = state.posts.indexOf(p); if (i < 0) return;
+  if (act === 'unimg') { const before = snap(); p.image = null; p.sample = false; const ref = rowRefs.get(p.id); if (ref) setThumb(ref, p); markAll(); save(); toast('画像を外しました', () => restoreSnap(before)); return; }
+  if (act === 'up' || act === 'down') {
+    const j = act === 'up' ? i - 1 : i + 1; if (j < 0 || j >= state.posts.length) return;
+    [state.posts[i], state.posts[j]] = [state.posts[j], state.posts[i]];
+    renderRows(); markAll(); save();
+    const ref = rowRefs.get(p.id); const nb = ref && $(`[data-act="${act}"]`, ref.el); if (nb) (nb.disabled ? $('[data-act="dup"]', ref.el) : nb).focus();
+    return;
+  }
+  if (act === 'dup') { const c = Object.assign({}, p, { id: uid(), sample: false }); state.posts.splice(i + 1, 0, c); renderRows(); markAll(); save(); return; }
+  if (act === 'del') { const before = snap(); state.posts.splice(i, 1); renderRows(); markAll(); save(); toast('1件削除しました', () => restoreSnap(before)); }
+}
+async function setRowImage(id, file) {
+  const p = state.posts.find(x => x.id === id); if (!p) return;
+  try { p.image = await loadImage(file); p.sample = false; }
+  catch (e) { toast('この画像は読み込めませんでした。JPG・PNG・WebP形式の画像を選んでください', null, 8000); return; }
+  const ref = rowRefs.get(id); if (ref) setThumb(ref, p);
+  els.sampleNote.hidden = !state.posts.some(x => x.sample);
+  markAll(); save();
+}
+const hasFiles = e => !!(e.dataTransfer && Array.from(e.dataTransfer.types || []).includes('Files'));
+const isImgFile = f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif)$/i.test(f.name || '');
+async function addImages(files) {
+  const list = Array.from(files || []).filter(isImgFile);
+  if (!list.length) { toast('画像ファイルが見つかりませんでした', null, 7000); return; }
+  const loaded = []; let bad = 0;
+  for (const f of list) { try { loaded.push(await loadImage(f)); } catch (e) { bad++; } }
+  if (!loaded.length) { toast(`画像を読み込めませんでした（${bad}枚）。JPG・PNG・WebP形式の画像を選んでください`, null, 8000); return; }
+  const before = snap(); clearSampleRows();
+  let slot = 0;
+  for (const im of loaded) {
+    while (slot < state.posts.length && state.posts[slot].image) slot++;
+    if (slot < state.posts.length) state.posts[slot].image = im; else state.posts.push(newPost({ image: im }));
+    slot++;
+  }
+  renderRows(); markAll(); save();
+  toast(`${loaded.length}枚の画像を入れました` + (bad ? `（${bad}枚は読み込めませんでした。JPG・PNG・WebP形式で試してください）` : ''), () => restoreSnap(before), bad ? 8000 : 0);
+}
+function updateCounts() {
+  const act = activePosts();
+  els.postCount.textContent = `${state.posts.length}件`;
+  state.posts.forEach(p => {
+    const ref = rowRefs.get(p.id); if (!ref) return;
+    const k = act.indexOf(p);
+    ref.no.textContent = k >= 0 ? String(k + 1).padStart(2, '0') : '—';
+    ref.no.classList.toggle('on', k >= 0);
+    ref.warn.hidden = !(k >= 0 && p._overflow);
+  });
+  const sz = SIZES[state.settings.size];
+  els.sheetMeta.textContent = `${act.length ? act.length + '枚' : '見本'} · ${sz.w}×${sz.h}px · ${sz.ratio}`;
+  els.zipBtn.textContent = exporting ? els.zipBtn.textContent : (act.length ? `まとめて保存（${act.length}枚・ZIP）` : 'まとめて保存（ZIP）');
+  els.zipBtn.disabled = exporting || !act.length;
+}
+
+/* ========== プレビュー ========== */
+const frames = new Map();
+const dirty = new Set();
+let allDirty = true, minisDirty = true, renderTimer = 0, renderSeq = 0;
+function markAll() { allDirty = true; minisDirty = true; scheduleRender(); }
+function markPost(id) { dirty.add(id); const a = activePosts(); if (a[0] && a[0].id === id) minisDirty = true; scheduleRender(); }
+function scheduleRender() { clearTimeout(renderTimer); renderTimer = setTimeout(renderAll, 90); }
+let fontsSheetReady = null;
+function waitFontSheet() {
+  if (fontsSheetReady) return fontsSheetReady;
+  const link = document.getElementById('gfonts');
+  fontsSheetReady = new Promise(res => {
+    try { if (link && link.sheet && link.sheet.cssRules) { res(); return; } } catch (e) { /* 別オリジンのため読めない＝読み込み済み */ res(); return; }
+    if (!link) { res(); return; }
+    link.addEventListener('load', () => res(), { once: true });
+    link.addEventListener('error', () => res(), { once: true });
+    setTimeout(res, 4000);
+  });
+  return fontsSheetReady;
+}
+async function ensureFonts() {
+  if (!document.fonts || !document.fonts.load) return;
+  await waitFontSheet();
+  const F = FONTS[state.settings.font] || FONTS.round;
+  const titles = state.posts.map(p => stripMarks(p.title)).join('') + '0123456789/ タイトル';
+  const bodies = state.posts.map(p => stripMarks(p.body)).join('') + state.settings.handle + '0123456789/ 本文がここに入ります…';
+  const jobs = [
+    document.fonts.load(fontStr(F.t[0], F.t[1], 40), titles),
+    document.fonts.load(fontStr(F.b[0], F.b[1], 40), bodies),
+    document.fonts.load(fontStr(F.b[0], F.b[2], 40), bodies),
+  ].map(p => p.catch(() => null));
+  await Promise.race([Promise.all(jobs), sleep(5000)]);
+}
+function frameEl(p) {
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'frame';
+  b.innerHTML = '<div class="fr"><canvas width="10" height="10"></canvas></div><div class="fmeta"><span class="mono"></span><span class="fwarn" hidden>文字あふれ</span></div>';
+  const f = { el: b, canvas: $('canvas', b), no: $('.mono', b), warn: $('.fwarn', b), idx: -1, n: -1 };
+  b.addEventListener('click', () => { const k = activePosts().findIndex(x => x.id === p.id); if (k >= 0) openModal(k); });
+  frames.set(p.id, f); return f;
+}
+function loadedFaces() { let n = 0; try { document.fonts.forEach(f => { if (f.status === 'loaded') n++; }); } catch (e) {} return n; }
+async function renderAll() {
+  const seq = ++renderSeq;
+  drawAll();
+  const before = loadedFaces();
+  await ensureFonts();
+  if (seq !== renderSeq) return;
+  if (loadedFaces() !== before) { mcache.clear(); allDirty = true; minisDirty = true; drawAll(); }
+}
+function drawAll() {
+  const real = activePosts(), isDemo = !real.length, act = isDemo ? [DEMO_POST] : real, n = act.length, sz = SIZES[state.settings.size], W = sz.w, H = sz.h;
+  const keep = new Set(act.map(p => p.id));
+  for (const [id, f] of frames) if (!keep.has(id)) { f.el.remove(); frames.delete(id); }
+  const ps = Math.min(1, (400 * DPR()) / Math.max(W, H));
+  const cw = Math.round(W * ps), ch = Math.round(H * ps);
+  act.forEach((p, i) => {
+    let f = frames.get(p.id); const fresh = !f; if (!f) f = frameEl(p);
+    if (els.frames.children[i] !== f.el) els.frames.insertBefore(f.el, els.frames.children[i] || null);
+    const need = fresh || allDirty || dirty.has(p.id) || f.idx !== i || f.n !== n || f.canvas.width !== cw || f.canvas.height !== ch;
+    if (!need) return;
+    if (f.canvas.width !== cw || f.canvas.height !== ch) { f.canvas.width = cw; f.canvas.height = ch; }
+    const ctx = f.canvas.getContext('2d');
+    ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cw, ch); ctx.setTransform(ps, 0, 0, ps, 0, 0);
+    let r = {}; try { r = renderPost(ctx, W, H, p, i, n, true, null, ps); } catch (e) { console.error(e); }
+    p._overflow = !!r.overflow;
+    f.no.textContent = isDemo ? '見本' : String(i + 1).padStart(2, '0'); f.warn.hidden = !p._overflow || isDemo;
+    f.el.classList.toggle('demo', isDemo); f.el.tabIndex = isDemo ? -1 : 0;
+    f.el.setAttribute('aria-label', isDemo ? '見本' : `${i + 1}枚目を大きく表示` + (p._overflow ? '（文字があふれています）' : ''));
+    f.idx = i; f.n = n;
+  });
+  allDirty = false; dirty.clear();
+  els.sheetEmpty.hidden = !isDemo;
+  if (minisDirty) { renderMinis(real); minisDirty = false; }
+  updateCounts();
+  if (!els.modal.hidden) renderModal();
+}
+function renderBgThumbs() {
+  const pal = getPal(), cw = Math.round(96 * DPR()), ch = Math.round(72 * DPR());
+  for (const [k, c] of Object.entries(bgCanvases)) {
+    if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
+    const ctx = c.getContext('2d'); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cw, ch);
+    if (k === 'none') { ctx.fillStyle = pal.card; ctx.fillRect(0, 0, cw, ch); ctx.strokeStyle = pal.sub; ctx.lineWidth = Math.max(1, cw / 60); ctx.beginPath(); ctx.moveTo(cw * 0.3, ch * 0.75); ctx.lineTo(cw * 0.7, ch * 0.25); ctx.stroke(); continue; }
+    const seed = (hashStr('thumb-' + k) ^ Math.imul((state.settings.bgSeed | 0) + 1, 2654435761)) >>> 0;
+    drawPattern(ctx, k === 'auto' ? BG_KINDS[seed % BG_KINDS.length] : k, seed, pal, 0, 0, cw, ch);
+    if (k === 'auto') { ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, ch * 0.62, cw, ch * 0.38); ctx.fillStyle = '#fff'; ctx.font = `700 ${Math.round(ch * 0.22)}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('MIX', cw / 2, ch * 0.81); }
+  }
+}
+function renderMinis(act) {
+  renderBgThumbs();
+  const sz = SIZES[state.settings.size], W = sz.w, H = sz.h;
+  const demo = act[0] || DEMO_POST;
+  const ps = (120 * DPR()) / Math.max(W, H);
+  for (const [k, c] of Object.entries(tplCanvases)) {
+    const cw = Math.round(W * ps), ch = Math.round(H * ps);
+    if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
+    const ctx = c.getContext('2d'); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cw, ch); ctx.setTransform(ps, 0, 0, ps, 0, 0);
+    try { renderPost(ctx, W, H, demo, 0, Math.max(1, act.length), true, k, ps); } catch (e) { console.error(e); }
+  }
+}
+
+/* ========== 拡大表示 ========== */
+let modalIdx = 0, lastFocus = null;
+function openModal(i) { lastFocus = document.activeElement; modalIdx = i; els.modal.hidden = false; renderModal(); els.mClose.focus(); }
+function closeModal() { els.modal.hidden = true; if (lastFocus && lastFocus.focus) lastFocus.focus(); }
+function renderModal() {
+  const act = activePosts(); if (!act.length) { closeModal(); return; }
+  modalIdx = Math.max(0, Math.min(act.length - 1, modalIdx));
+  const p = act[modalIdx], sz = SIZES[state.settings.size], W = sz.w, H = sz.h;
+  const availW = Math.min(980, window.innerWidth - 32), availH = Math.max(200, window.innerHeight - 170);
+  const ps = Math.min(1, Math.min(availW / W, availH / H) * DPR());
+  const c = els.mCanvas; const cw = Math.round(W * ps), ch = Math.round(H * ps);
+  if (c.width !== cw || c.height !== ch) { c.width = cw; c.height = ch; }
+  const ctx = c.getContext('2d'); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, cw, ch); ctx.setTransform(ps, 0, 0, ps, 0, 0);
+  let r = {}; try { r = renderPost(ctx, W, H, p, modalIdx, act.length, false, null, ps); } catch (e) { console.error(e); }
+  els.mNo.textContent = `${modalIdx + 1} / ${act.length}`;
+  els.mPrev.disabled = modalIdx === 0; els.mNext.disabled = modalIdx === act.length - 1;
+  els.mWarn.hidden = !r.overflow;
+}
+
+/* ========== 書き出し ========== */
+let exporting = false;
+const pad2 = n => String(n).padStart(2, '0');
+const dateStr = () => { const d = new Date(); return `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`; };
+const ext = () => state.settings.fmt === 'jpg' ? 'jpg' : 'png';
+async function renderBlob(p, i, n) {
+  const sz = SIZES[state.settings.size], c = document.createElement('canvas'); c.width = sz.w; c.height = sz.h;
+  const ctx = c.getContext('2d'); renderPost(ctx, sz.w, sz.h, p, i, n, false, null, 1);
+  const type = ext() === 'jpg' ? 'image/jpeg' : 'image/png';
+  const blob = await new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error('blob')), type, 0.92));
+  c.width = 1; c.height = 1; return blob;
+}
+function saveFile(name, blob) {
+  try {
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+    toast('保存しました：' + name);
+  } catch (e) { toast('保存できませんでした。別のブラウザで試してください'); }
+}
+async function exportZip() {
+  const act = activePosts(); if (!act.length || exporting) return;
+  if (typeof JSZip === 'undefined') { toast('ZIPの準備ができませんでした。プレビューを押して1枚ずつ保存してください'); return; }
+  exporting = true; els.zipBtn.disabled = true;
+  try {
+    await ensureFonts();
+    const zip = new JSZip();
+    for (let i = 0; i < act.length; i++) {
+      els.zipBtn.textContent = `画像を作成中 ${i + 1}/${act.length}`;
+      const b = await renderBlob(act[i], i, act.length);
+      zip.file(`sns-post_${pad2(i + 1)}.${ext()}`, b);
+      await sleep(0);
+    }
+    els.zipBtn.textContent = 'ZIPにまとめています…';
+    const z = await zip.generateAsync({ type: 'blob', compression: 'STORE' });
+    exporting = false; updateCounts();
+    saveFile(`sns-posts_${dateStr()}.zip`, z);
+  } catch (e) { console.error(e); toast('書き出しに失敗しました。もう一度お試しください'); }
+  finally { exporting = false; updateCounts(); }
+}
+async function saveOne() {
+  const act = activePosts(), p = act[modalIdx]; if (!p) return;
+  els.mSave.disabled = true;
+  try { await ensureFonts(); const b = await renderBlob(p, modalIdx, act.length); saveFile(`sns-post_${pad2(modalIdx + 1)}.${ext()}`, b); }
+  catch (e) { console.error(e); toast('画像を作れませんでした。もう一度お試しください'); }
+  finally { els.mSave.disabled = false; }
+}
+
+/* ========== AI（指示文のコピーと答えの読み込み） ========== */
+function setStatus(el, t, kind) { el.textContent = t || ''; el.className = 'status' + (kind ? ' ' + kind : ''); }
+function readAI() {
+  const a = state.ai;
+  a.theme = els.aiTheme.value; a.audience = els.aiAud.value; a.tone = els.aiTone.value; a.mode = els.aiMode.value;
+  a.count = Math.min(10, Math.max(1, Math.round(+els.aiCount.value || 5))); a.len = els.aiLen.value; a.fill = els.aiFill.value;
+  return a;
+}
+const clean = (s, max) => String(s == null ? '' : s).replace(/\r\n?/g, '\n').replace(/\\n/g, '\n').trim().slice(0, max);
+function rulesText(len) {
+  return [
+    '- タイトルは全角20字以内。',
+    `- 本文は1枚あたり全角${len}字以内。画像に載せる文字なので、短い文にして、意味の切れ目で改行する。`,
+    '- いちばん伝えたい言葉を、本文の中で1か所だけ **このように** 二重アスタリスクで囲む。',
+    '- 確かめられない数字・統計・効果の言い切りは書かない。',
+    '- 絵文字や記号の飾りは使わない。',
+  ].join('\n');
+}
+function batchPrompt(a) {
+  const n = a.count, len = LEN[a.len] || 80;
+  const form = a.mode === 'carousel'
+    ? `1つの投稿で横にめくって読む${n}枚組（カルーセル）。1枚目は表紙で、続きを読みたくなる見出しにする。${n >= 3 ? '最後の1枚は、まとめと、保存やフォローなど次の行動をうながす一言にする。' : ''}`
+    : `それぞれ1枚で完結する、別々の投稿を${n}本。内容が重ならないようにする。`;
+  return `あなたはSNS投稿の画像に載せる文章を作るコピーライターです。
+次の条件で、投稿画像${n}枚分のタイトルと本文を日本語で作ってください。
+
+【テーマ・伝えたいこと】
+${a.theme.trim()}
+
+【読む人】${a.audience.trim() || '指定なし'}
+【口調】${a.tone}
+【形式】${form}
+
+ルール:
+${rulesText(len)}
+- あわせて、投稿に添える文章（キャプション、全角200字以内）と、ハッシュタグを5〜8個作る。
+
+出力は次の形のJSONだけにしてください。前後に説明文は書かないでください。slidesはちょうど${n}個です。本文の改行は \\n で書いてください。
+{"slides":[{"title":"…","body":"…"}],"caption":"…","hashtags":["#…"]}`;
+}
+function copyPrompt() {
+  const a = readAI(); save();
+  if (!a.theme.trim()) { setStatus(els.aiStatus, 'テーマ・伝えたいことを入れてください。', 'warn'); els.aiTheme.focus(); return; }
+  const text = batchPrompt(a);
+  els.aiPrompt.value = text; els.aiPrompt.hidden = false;
+  let p; try { p = navigator.clipboard.writeText(text); } catch (e) { p = Promise.reject(e); }
+  p.then(() => setStatus(els.aiStatus, 'コピーしました。AIの入力欄に貼り付けて送ってください。', 'ok'))
+   .catch(() => { els.aiPrompt.focus(); els.aiPrompt.select(); setStatus(els.aiStatus, '自動でコピーできませんでした。下の指示文を選んでコピーしてください。', 'warn'); });
+}
+function tryJSON(t) {
+  try { return JSON.parse(t); } catch (e) {}
+  try { return JSON.parse(t.replace(/[“”]/g, '"').replace(/,\s*([}\]])/g, '$1')); } catch (e) {}
+  return undefined;
+}
+function normTags(v) {
+  let t = v; t = Array.isArray(t) ? t : typeof t === 'string' ? t.split(/[\s,、]+/) : [];
+  return t.map(x => String(x).trim()).filter(Boolean).map(x => /^[#＃]/.test(x) ? x : '#' + x).slice(0, 30);
+}
+function parseAIAnswer(raw) {
+  const s = String(raw || '').replace(/\r\n?/g, '\n').trim();
+  if (!s) return null;
+  const cands = [];
+  const fence = s.match(/```[a-zA-Z]*[ \t]*\n?([\s\S]*?)```/);
+  if (fence) cands.push(fence[1].trim());
+  cands.push(s);
+  const i = s.indexOf('{'), j = s.lastIndexOf('}'); if (i >= 0 && j > i) cands.push(s.slice(i, j + 1));
+  const k = s.indexOf('['), l = s.lastIndexOf(']'); if (k >= 0 && l > k) cands.push(s.slice(k, l + 1));
+  for (const c of cands) {
+    const v = tryJSON(c);
+    if (!v || typeof v !== 'object') continue;
+    const arr = Array.isArray(v) ? v : Array.isArray(v.slides) ? v.slides : null;
+    if (!arr) continue;
+    const slides = arr.map(x => ({
+      title: clean(x && (x.title != null ? x.title : x['タイトル']), 80),
+      body: clean(x && (x.body != null ? x.body : x['本文']), 600),
+    })).filter(x => x.title || x.body).slice(0, 30);
+    if (!slides.length) continue;
+    return { slides, caption: Array.isArray(v) ? '' : clean(v.caption, 2000), tags: Array.isArray(v) ? [] : normTags(v.hashtags) };
+  }
+  if (/"slides"\s*:/.test(s)) return { error: 'json' };
+  const list = parseBulk(s).slice(0, 30);
+  return list.length ? { slides: list, caption: '', tags: [] } : null;
+}
+function applyAnswer() {
+  const r = parseAIAnswer(els.aiAnswer.value);
+  if (!r || r.error) {
+    setStatus(els.ansStatus, r && r.error
+      ? '答えの形がくずれていて読み込めませんでした。AIに「JSONだけをもう一度出してください」と頼んで、貼り付け直してください。'
+      : '読み込める文章がありませんでした。AIの答えをそのまま全部貼り付けてください。', 'warn');
+    els.aiAnswer.focus(); return;
+  }
+  readAI();
+  const before = snap();
+  applyTexts(r.slides, state.ai.fill);
+  if (r.caption) state.caption = r.caption;
+  if (r.tags.length) state.tags = r.tags.join(' ');
+  syncCaptionUI(); save();
+  els.aiAnswer.value = '';
+  const extra = (r.caption || r.tags.length) ? '投稿文・ハッシュタグも入れました。' : '';
+  setStatus(els.ansStatus, `${r.slides.length}枚分の文章を入れました。${extra}`, 'ok');
+  toast(`${r.slides.length}枚分の文章を入れました`, () => restoreSnap(before));
+}
+
+/* ========== 通知 ========== */
+let toastTimer = 0, toastUndo = null;
+function toast(msg, undo, ms) {
+  els.toastMsg.textContent = msg; toastUndo = undo || null; els.toastAct.hidden = !undo;
+  els.toast.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { els.toast.hidden = true; toastUndo = null; }, ms || (undo ? 7000 : 3600));
+}
+els.toastAct.addEventListener('click', () => { const f = toastUndo; els.toast.hidden = true; toastUndo = null; if (f) f(); });
+
+/* ========== イベント ========== */
+function wire() {
+  for (const b of els.align.children) b.addEventListener('click', () => setSetting('align', b.dataset.v));
+  els.font.addEventListener('change', () => setSetting('font', els.font.value));
+  els.fmt.addEventListener('change', () => { state.settings.fmt = els.fmt.value; save(); });
+  els.pageNo.addEventListener('change', () => setSetting('pageNo', els.pageNo.checked));
+  els.handle.addEventListener('input', () => { state.settings.handle = els.handle.value; markAll(); save(); });
+  els.accent.addEventListener('input', () => { state.settings.accent = els.accent.value; els.accentReset.hidden = false; markAll(); save(); });
+  els.accentReset.addEventListener('click', () => setSetting('accent', ''));
+  els.bgShuffle.addEventListener('click', () => { state.settings.bgSeed = ((state.settings.bgSeed | 0) + 1) % 100000; markAll(); save(); });
+
+  ['aiTheme', 'aiAud', 'aiTone', 'aiMode', 'aiCount', 'aiLen', 'aiFill'].forEach(id => els[id].addEventListener('change', () => { readAI(); save(); }));
+  els.aiCopy.addEventListener('click', copyPrompt);
+  els.aiApply.addEventListener('click', applyAnswer);
+
+  els.bulkImgBtn.addEventListener('click', () => { els.bulkImg.value = ''; els.bulkImg.click(); });
+  els.bulkImg.addEventListener('change', () => { if (els.bulkImg.files && els.bulkImg.files.length) addImages(els.bulkImg.files); });
+  els.oneImg.addEventListener('change', () => { const f = els.oneImg.files && els.oneImg.files[0]; if (f && oneImgTarget) setRowImage(oneImgTarget, f); });
+  els.bulkTextBtn.addEventListener('click', () => {
+    const open = els.bulkPanel.hidden; els.bulkPanel.hidden = !open; els.bulkTextBtn.setAttribute('aria-expanded', String(open)); if (open) els.bulkText.focus();
+  });
+  els.bulkApply.addEventListener('click', () => {
+    const list = parseBulk(els.bulkText.value);
+    if (!list.length) { toast('読み込める文章がありませんでした'); els.bulkText.focus(); return; }
+    const before = snap(); applyTexts(list, els.bulkFill.value);
+    els.bulkText.value = ''; els.bulkPanel.hidden = true; els.bulkTextBtn.setAttribute('aria-expanded', 'false');
+    toast(`${list.length}件の文章を入れました`, () => restoreSnap(before));
+  });
+  els.addRow.addEventListener('click', () => {
+    state.posts.push(newPost()); renderRows(); markAll(); save();
+    const p = state.posts[state.posts.length - 1], ref = rowRefs.get(p.id); if (ref) ref.t.focus();
+  });
+  els.clearAll.addEventListener('click', () => {
+    if (!state.posts.length) return;
+    const before = snap();
+    state.posts = []; renderRows(); markAll(); save(); toast('すべて消しました', () => restoreSnap(before));
+  });
+  els.clearSample.addEventListener('click', () => { const before = snap(); if (clearSampleRows()) { renderRows(); markAll(); save(); toast('サンプルを消しました', () => restoreSnap(before)); } });
+
+  els.rows.addEventListener('dragover', e => { if (hasFiles(e)) { e.preventDefault(); els.rows.classList.add('drop'); } });
+  els.rows.addEventListener('dragleave', e => { if (!els.rows.contains(e.relatedTarget)) els.rows.classList.remove('drop'); });
+  els.rows.addEventListener('drop', e => { e.preventDefault(); els.rows.classList.remove('drop'); if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) addImages(e.dataTransfer.files); });
+  document.addEventListener('dragover', e => { if (hasFiles(e)) e.preventDefault(); });
+  document.addEventListener('drop', e => { if (hasFiles(e)) e.preventDefault(); });
+
+  els.caption.addEventListener('input', () => { state.caption = els.caption.value; updateCapCount(); save(); });
+  els.tags.addEventListener('input', () => { state.tags = els.tags.value; save(); });
+  els.copyCap.addEventListener('click', () => {
+    const text = [state.caption.trim(), state.tags.trim()].filter(Boolean).join('\n\n');
+    if (!text) { toast('コピーする文章がありません'); return; }
+    let p; try { p = navigator.clipboard.writeText(text); } catch (e) { p = Promise.reject(e); }
+    p.then(() => toast('投稿文とタグをコピーしました')).catch(() => { els.caption.focus(); els.caption.select(); toast('コピーできませんでした。選択した文章をコピーしてください'); });
+  });
+
+  let dockCollapsed = false; try { dockCollapsed = localStorage.getItem('dockCollapsed') === '1'; } catch (e) {}
+  const syncDock = () => { els.sheet.classList.toggle('collapsed', dockCollapsed); els.dockToggle.textContent = dockCollapsed ? '表示' : '隠す'; els.dockToggle.setAttribute('aria-expanded', String(!dockCollapsed)); };
+  els.dockToggle.addEventListener('click', () => { dockCollapsed = !dockCollapsed; try { localStorage.setItem('dockCollapsed', dockCollapsed ? '1' : '0'); } catch (e) {} syncDock(); });
+  syncDock();
+  els.zipBtn.addEventListener('click', exportZip);
+  els.mClose.addEventListener('click', closeModal);
+  els.mPrev.addEventListener('click', () => { modalIdx--; renderModal(); });
+  els.mNext.addEventListener('click', () => { modalIdx++; renderModal(); });
+  els.mSave.addEventListener('click', saveOne);
+  els.modal.addEventListener('click', e => { if (e.target === els.modal) closeModal(); });
+  document.addEventListener('keydown', e => {
+    if (els.modal.hidden) return;
+    if (e.key === 'Escape') { e.preventDefault(); closeModal(); }
+    else if (e.key === 'ArrowLeft' && !els.mPrev.disabled) { modalIdx--; renderModal(); }
+    else if (e.key === 'ArrowRight' && !els.mNext.disabled) { modalIdx++; renderModal(); }
+  });
+  let rz = 0; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (!els.modal.hidden) renderModal(); }, 150); });
+  if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', () => { mcache.clear(); markAll(); });
+}
+
+/* ========== 起動 ========== */
+async function init() {
+  buildStatic(); wire(); syncSettingsUI();
+  sampleArt(1).then(b => b ? loadImage(b) : null).then(im => { if (im) { DEMO_POST.image = im; markAll(); } }).catch(() => {});
+  let ok = false; try { ok = await restore(); } catch (e) { ok = false; }
+  if (!ok) await loadSample();
+  syncSettingsUI(); syncAIUI(); syncCaptionUI(); renderRows(); markAll();
+  if (!ok) save();
+}
+init();
+})();
+</script>
+</body>
+</html>
