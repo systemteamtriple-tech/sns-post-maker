@@ -145,7 +145,7 @@ input[type=checkbox]{accent-color:var(--accent);width:18px;height:18px}
 .step-body{display:grid;gap:10px;min-width:0}
 .step-t{font-weight:700;font-size:14.5px;line-height:28px}
 .links{display:flex;gap:6px 16px;flex-wrap:wrap;font-size:13.5px}
-.links a{color:var(--accent);font-weight:700;text-underline-offset:3px}
+.links a,.open-link{color:var(--accent);font-weight:700;text-underline-offset:3px;font-size:13.5px}
 .acts select{width:auto;max-width:100%}
 #aiPrompt{font-size:13px;line-height:1.6;color:var(--muted)}
 .privacy{font-size:12.5px;color:var(--muted);text-align:center}
@@ -291,17 +291,20 @@ input[type=checkbox]{accent-color:var(--accent);width:18px;height:18px}
           </div>
         </div></li>
         <li class="step"><div class="step-body">
-          <div class="step-t">指示文をコピーして、AIに送る</div>
-          <div class="acts"><button class="btn primary" id="aiCopy" type="button">指示文をコピー</button><span class="status" id="aiStatus" role="status" aria-live="polite"></span></div>
-          <div class="links"><a href="https://chatgpt.com/" target="_blank" rel="noopener">ChatGPTを開く</a><a href="https://claude.ai/" target="_blank" rel="noopener">Claudeを開く</a><a href="https://gemini.google.com/" target="_blank" rel="noopener">Geminiを開く</a></div>
+          <div class="step-t">使うAIを選んで、指示文を送る</div>
+          <div class="segbtn" id="aiPick" role="group" aria-label="使うAI"><button type="button" data-v="chatgpt">ChatGPT</button><button type="button" data-v="claude">Claude</button><button type="button" data-v="gemini">Gemini</button></div>
+          <div class="acts"><button class="btn primary" id="aiCopy" type="button">指示文をコピーしてChatGPTを開く</button><a class="open-link" id="aiOpenLink" href="https://chatgpt.com/" target="_blank" rel="noopener" hidden>ChatGPTをもう一度開く</a></div>
+          <p class="hint">開いたAIの入力欄に貼り付けて（Ctrl+V／⌘+V）、そのまま送ってください。</p>
+          <span class="status" id="aiStatus" role="status" aria-live="polite"></span>
           <label class="sr" for="aiPrompt">AIへの指示文</label>
           <textarea id="aiPrompt" rows="6" readonly hidden></textarea>
         </div></li>
         <li class="step"><div class="step-body">
-          <div class="step-t">AIの答えを貼り付けて読み込む</div>
+          <div class="step-t">AIの答えをコピーして、ここに貼り付ける</div>
+          <p class="hint">答えの下にあるコピーボタンを押してから、この画面に戻って下の欄に貼り付けます。貼り付けると自動で読み込みます。</p>
           <label class="sr" for="aiAnswer">AIの答え</label>
-          <textarea id="aiAnswer" rows="5" placeholder="AIの答えを、そのまま全部貼り付けてください"></textarea>
-          <div class="acts"><label class="sr" for="aiFill">入れ方</label><select id="aiFill"><option value="replace">上の行から順に入れる（画像はそのまま）</option><option value="append">いまの行の後ろに追加する</option></select><button class="btn primary" id="aiApply" type="button">読み込む</button></div>
+          <textarea id="aiAnswer" rows="4" placeholder="ここに貼り付け（Ctrl+V／⌘+V）"></textarea>
+          <div class="acts"><label class="sr" for="aiFill">入れ方</label><select id="aiFill"><option value="replace">いまの投稿と入れかえる（枚数もそろえる）</option><option value="append">いまの投稿の後ろに追加する</option></select><button class="btn primary" id="aiApply" type="button">読み込む</button></div>
           <span class="status" id="ansStatus" role="status" aria-live="polite"></span>
         </div></li>
       </ol>
@@ -321,7 +324,7 @@ input[type=checkbox]{accent-color:var(--accent);width:18px;height:18px}
         <p class="note">1件ずつ「1行目がタイトル、2行目からが本文」で書き、空いた行で区切ります。本文に空いた行を入れたいときは「---」だけの行で区切ってください。Excelやスプレッドシートの「タイトル｜本文」の2列をそのまま貼り付けても読み込めます。</p>
         <label class="sr" for="bulkText">まとめて入力する文章</label>
         <textarea id="bulkText" rows="7" placeholder="始める時間を決める&#10;毎朝おなじ時間に机に向かう。&#10;&#10;机の上は1つの作業だけ&#10;関係ない物は見えない所へ。"></textarea>
-        <div class="acts"><label class="sr" for="bulkFill">入れ方</label><select id="bulkFill"><option value="replace">上の行から順に入れる（画像はそのまま）</option><option value="append">いまの行の後ろに追加する</option></select><button class="btn primary" id="bulkApply" type="button">読み込む</button></div>
+        <div class="acts"><label class="sr" for="bulkFill">入れ方</label><select id="bulkFill"><option value="replace">いまの投稿と入れかえる（枚数もそろえる）</option><option value="append">いまの投稿の後ろに追加する</option></select><button class="btn primary" id="bulkApply" type="button">読み込む</button></div>
       </div>
       <div class="sample-note" id="sampleNote" hidden><span>サンプルを表示中です。画像や文章をまとめて入れると、サンプルは自動で消えます。</span><button class="btn small" id="clearSample" type="button">サンプルを消す</button></div>
       <div class="rows" id="rows"></div>
@@ -419,7 +422,7 @@ const DEMO_POST = { id: '__demo', title: 'タイトルが入ります', body: '�
 
 const state = {
   settings: { size: 'pt', tpl: 'card', pal: 'mint', accent: '', font: 'round', align: 'left', handle: '', pageNo: true, fmt: 'png', bg: 'shape', bgSeed: 0 },
-  ai: { theme: '', audience: '', tone: 'やさしい', mode: 'carousel', count: 5, len: 'mid', fill: 'replace' },
+  ai: { theme: '', audience: '', tone: 'やさしい', mode: 'carousel', count: 5, len: 'mid', fill: 'replace', target: 'chatgpt' },
   caption: '', tags: '',
   posts: [],
 };
@@ -932,6 +935,7 @@ async function restore() {
   if (Number.isFinite(+s.bgSeed)) state.settings.bgSeed = Math.abs(Math.round(+s.bgSeed)) % 100000;
   const a = d.ai || {};
   for (const k of ['theme', 'audience', 'tone', 'mode', 'len', 'fill']) if (typeof a[k] === 'string') state.ai[k] = a[k];
+  if (AI_TARGETS[a.target]) state.ai.target = a.target;
   if (Number.isFinite(+a.count)) state.ai.count = Math.min(10, Math.max(1, Math.round(+a.count)));
   state.caption = typeof d.caption === 'string' ? d.caption : '';
   state.tags = typeof d.tags === 'string' ? d.tags : '';
@@ -968,14 +972,18 @@ function clearSampleRows() {
 }
 function applyTexts(list, mode) {
   clearSampleRows();
+  let removed = 0;
   if (mode === 'replace') {
     list.forEach((s, i) => {
       const p = state.posts[i];
       if (p) { p.title = s.title; p.body = s.body; p.sample = false; } else state.posts.push(newPost(s));
     });
+    if (state.posts.length > list.length) { removed = state.posts.length - list.length; state.posts.splice(list.length); }
   } else list.forEach(s => state.posts.push(newPost(s)));
   renderRows(); markAll(); save();
+  return removed;
 }
+const removedNote = n => n ? `（余った${n}行は消しました）` : '';
 function parseTSV(text) {
   const rows = []; let row = [], f = '', q = false;
   for (let i = 0; i < text.length; i++) {
@@ -1006,7 +1014,7 @@ function parseBulk(text) {
 
 /* ========== 画面：静的部品 ========== */
 const els = {};
-['sizes','tpls','pals','bgs','bgShuffle','accent','accentReset','font','align','handle','pageNo','fmt','zipBtn','topDims','aiTheme','aiAud','aiTone','aiMode','aiCount','aiLen','aiFill','aiCopy','aiPrompt','aiAnswer','aiApply','ansStatus','aiStatus','postCount','bulkImgBtn','bulkImg','oneImg','bulkTextBtn','bulkPanel','bulkText','bulkFill','bulkApply','addRow','clearAll','sampleNote','clearSample','rows','caption','tags','copyCap','capCount','frames','sheetEmpty','sheetMeta','sheet','dockToggle','modal','mNo','mPrev','mNext','mSave','mClose','mCanvas','mWarn','toast','toastMsg','toastAct'].forEach(id => els[id] = document.getElementById(id));
+['sizes','tpls','pals','bgs','bgShuffle','accent','accentReset','font','align','handle','pageNo','fmt','zipBtn','topDims','aiTheme','aiAud','aiTone','aiMode','aiCount','aiLen','aiFill','aiPick','aiOpenLink','aiCopy','aiPrompt','aiAnswer','aiApply','ansStatus','aiStatus','postCount','bulkImgBtn','bulkImg','oneImg','bulkTextBtn','bulkPanel','bulkText','bulkFill','bulkApply','addRow','clearAll','sampleNote','clearSample','rows','caption','tags','copyCap','capCount','frames','sheetEmpty','sheetMeta','sheet','dockToggle','modal','mNo','mPrev','mNext','mSave','mClose','mCanvas','mWarn','toast','toastMsg','toastAct'].forEach(id => els[id] = document.getElementById(id));
 
 const tplCanvases = {};
 const bgCanvases = {};
@@ -1058,6 +1066,13 @@ function syncAIUI() {
   const a = state.ai;
   els.aiTheme.value = a.theme; els.aiAud.value = a.audience; els.aiTone.value = a.tone; els.aiMode.value = a.mode;
   els.aiCount.value = a.count; els.aiLen.value = a.len; els.aiFill.value = a.fill;
+  syncAIPick();
+}
+function syncAIPick() {
+  const t = AI_TARGETS[state.ai.target] || AI_TARGETS.chatgpt;
+  for (const b of els.aiPick.children) b.setAttribute('aria-pressed', String(b.dataset.v === state.ai.target));
+  els.aiCopy.textContent = `指示文をコピーして${t.name}を開く`;
+  els.aiOpenLink.href = t.url; els.aiOpenLink.textContent = `${t.name}をもう一度開く`;
 }
 function syncCaptionUI() { els.caption.value = state.caption; els.tags.value = state.tags; updateCapCount(); }
 function updateCapCount() { els.capCount.textContent = graphemes(state.caption).filter(g => g !== '\n').length + '字'; }
@@ -1391,13 +1406,40 @@ ${rulesText(len)}
 出力は次の形のJSONだけにしてください。前後に説明文は書かないでください。slidesはちょうど${n}個です。本文の改行は \\n で書いてください。
 {"slides":[{"title":"…","body":"…"}],"caption":"…","hashtags":["#…"]}`;
 }
-function copyPrompt() {
+const AI_TARGETS = {
+  chatgpt: { name: 'ChatGPT', url: 'https://chatgpt.com/' },
+  claude: { name: 'Claude', url: 'https://claude.ai/new' },
+  gemini: { name: 'Gemini', url: 'https://gemini.google.com/app' },
+};
+let awaitingAnswer = false;
+function copyNow(text) {
+  // 同じクリックの中でコピーを終わらせ、そのあとAIのタブを開く
+  const ta = document.createElement('textarea');
+  ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.top = '-1000px'; ta.style.opacity = '0';
+  document.body.appendChild(ta); ta.select();
+  let ok = false; try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove(); return ok;
+}
+function copyAndOpen() {
   const a = readAI(); save();
   if (!a.theme.trim()) { setStatus(els.aiStatus, 'テーマ・伝えたいことを入れてください。', 'warn'); els.aiTheme.focus(); return; }
+  const t = AI_TARGETS[a.target] || AI_TARGETS.chatgpt;
   const text = batchPrompt(a);
-  els.aiPrompt.value = text; els.aiPrompt.hidden = false;
+  els.aiPrompt.value = text;
+  els.aiOpenLink.hidden = false;
+  if (copyNow(text)) {
+    els.aiPrompt.hidden = true;
+    const w = window.open(t.url, '_blank');
+    if (w) { try { w.opener = null; } catch (e) {} }
+    awaitingAnswer = true;
+    setStatus(els.aiStatus, w
+      ? `コピーして${t.name}を開きました。入力欄に貼り付けて送ってください。`
+      : `コピーしました。${t.name}が開かなかったので、「${t.name}をもう一度開く」を押してください。`, 'ok');
+    return;
+  }
+  els.aiPrompt.hidden = false;
   let p; try { p = navigator.clipboard.writeText(text); } catch (e) { p = Promise.reject(e); }
-  p.then(() => setStatus(els.aiStatus, 'コピーしました。AIの入力欄に貼り付けて送ってください。', 'ok'))
+  p.then(() => { awaitingAnswer = true; setStatus(els.aiStatus, `コピーしました。「${t.name}をもう一度開く」を押して、入力欄に貼り付けてください。`, 'ok'); })
    .catch(() => { els.aiPrompt.focus(); els.aiPrompt.select(); setStatus(els.aiStatus, '自動でコピーできませんでした。下の指示文を選んでコピーしてください。', 'warn'); });
 }
 function tryJSON(t) {
@@ -1444,14 +1486,14 @@ function applyAnswer() {
   }
   readAI();
   const before = snap();
-  applyTexts(r.slides, state.ai.fill);
+  const removed = applyTexts(r.slides, state.ai.fill);
   if (r.caption) state.caption = r.caption;
   if (r.tags.length) state.tags = r.tags.join(' ');
   syncCaptionUI(); save();
   els.aiAnswer.value = '';
   const extra = (r.caption || r.tags.length) ? '投稿文・ハッシュタグも入れました。' : '';
-  setStatus(els.ansStatus, `${r.slides.length}枚分の文章を入れました。${extra}`, 'ok');
-  toast(`${r.slides.length}枚分の文章を入れました`, () => restoreSnap(before));
+  setStatus(els.ansStatus, `${r.slides.length}枚分の文章を入れました。${removedNote(removed)}${extra}`, 'ok');
+  toast(`${r.slides.length}枚分の文章を入れました${removedNote(removed)}`, () => restoreSnap(before), removed ? 9000 : 0);
 }
 
 /* ========== 通知 ========== */
@@ -1474,8 +1516,18 @@ function wire() {
   els.bgShuffle.addEventListener('click', () => { state.settings.bgSeed = ((state.settings.bgSeed | 0) + 1) % 100000; markAll(); save(); });
 
   ['aiTheme', 'aiAud', 'aiTone', 'aiMode', 'aiCount', 'aiLen', 'aiFill'].forEach(id => els[id].addEventListener('change', () => { readAI(); save(); }));
-  els.aiCopy.addEventListener('click', copyPrompt);
+  els.aiCopy.addEventListener('click', copyAndOpen);
   els.aiApply.addEventListener('click', applyAnswer);
+  for (const b of els.aiPick.children) b.addEventListener('click', () => { state.ai.target = b.dataset.v; syncAIPick(); save(); });
+  els.aiOpenLink.addEventListener('click', () => { awaitingAnswer = true; });
+  els.aiAnswer.addEventListener('paste', () => setTimeout(() => { if (els.aiAnswer.value.trim()) applyAnswer(); }, 0));
+  window.addEventListener('focus', () => {
+    if (!awaitingAnswer) return; awaitingAnswer = false;
+    const smooth = !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+    try { els.aiAnswer.scrollIntoView({ block: 'center', behavior: smooth ? 'smooth' : 'auto' }); } catch (e) {}
+    try { els.aiAnswer.focus({ preventScroll: true }); } catch (e) { els.aiAnswer.focus(); }
+    setStatus(els.ansStatus, 'AIの答えをコピーしたら、この欄に貼り付けてください。', '');
+  });
 
   els.bulkImgBtn.addEventListener('click', () => { els.bulkImg.value = ''; els.bulkImg.click(); });
   els.bulkImg.addEventListener('change', () => { if (els.bulkImg.files && els.bulkImg.files.length) addImages(els.bulkImg.files); });
@@ -1486,9 +1538,9 @@ function wire() {
   els.bulkApply.addEventListener('click', () => {
     const list = parseBulk(els.bulkText.value);
     if (!list.length) { toast('読み込める文章がありませんでした'); els.bulkText.focus(); return; }
-    const before = snap(); applyTexts(list, els.bulkFill.value);
+    const before = snap(); const removed = applyTexts(list, els.bulkFill.value);
     els.bulkText.value = ''; els.bulkPanel.hidden = true; els.bulkTextBtn.setAttribute('aria-expanded', 'false');
-    toast(`${list.length}件の文章を入れました`, () => restoreSnap(before));
+    toast(`${list.length}件の文章を入れました${removedNote(removed)}`, () => restoreSnap(before), removed ? 9000 : 0);
   });
   els.addRow.addEventListener('click', () => {
     state.posts.push(newPost()); renderRows(); markAll(); save();
